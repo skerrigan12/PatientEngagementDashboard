@@ -331,7 +331,10 @@
       </details>
     </div>
     <div class="card" id="fgFormCard">
-      <h3>Add Focus Group Response</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="margin:0;">Add Focus Group Response</h3>
+        <button type="button" class="btn secondary" onclick="fillSamePatient()">Same Patient as Last Entry</button>
+      </div>
       <form class="entry" id="fgForm">
         <div>
           <label>Date</label>
@@ -641,10 +644,11 @@ function clearSurveyFilter() {
 }
 
 // ---------- Focus group form ----------
+let lastFgMeta = null;
 document.getElementById('fgForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!editMode) return;
-  await insertFg({
+  const entry = {
     date: document.getElementById('fg-date').value,
     session: document.getElementById('fg-session').value,
     program: document.getElementById('fg-program').value,
@@ -656,10 +660,29 @@ document.getElementById('fgForm').addEventListener('submit', async (e) => {
     severity: parseInt(document.getElementById('fg-severity').value),
     escalate: document.getElementById('fg-escalate').value,
     context: document.getElementById('fg-context').value
-  });
+  };
+  await insertFg(entry);
+  lastFgMeta = {
+    date: entry.date, session: entry.session, program: entry.program,
+    gender: entry.gender, ama_risk: entry.ama_risk, patient: entry.patient
+  };
   e.target.reset();
   renderAll();
 });
+
+function fillSamePatient() {
+  if (!lastFgMeta) {
+    alert('No previous entry yet this session. Submit one entry first, then this button will carry its patient details forward.');
+    return;
+  }
+  document.getElementById('fg-date').value = lastFgMeta.date;
+  document.getElementById('fg-session').value = lastFgMeta.session;
+  document.getElementById('fg-program').value = lastFgMeta.program;
+  document.getElementById('fg-gender').value = lastFgMeta.gender;
+  document.getElementById('fg-ama').value = lastFgMeta.ama_risk;
+  document.getElementById('fg-patient').value = lastFgMeta.patient;
+  document.getElementById('fg-category').focus();
+}
 
 function renderFgTable() {
   const tbody = document.querySelector('#fgTable tbody');
