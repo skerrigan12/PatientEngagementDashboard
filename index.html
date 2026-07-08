@@ -123,6 +123,9 @@
   .sev-2 { background: var(--amber-100); color: var(--amber-600); }
   .sev-3 { background: var(--danger-bg); color: var(--danger); }
   .escalated { background: var(--danger-bg); color: var(--danger); font-weight: 700; }
+  .status-open { background: var(--amber-100); color: var(--amber-600); }
+  .status-progress { background: var(--blue-100); color: var(--blue-700); }
+  .status-resolved { background: var(--slate-50); color: var(--slate-700); }
   form.entry { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
   form.entry label { display: block; font-size: 11.5px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
   form.entry input, form.entry select, form.entry textarea {
@@ -184,6 +187,7 @@
   <button class="tab-btn" data-view="survey">Survey Data</button>
   <button class="tab-btn" data-view="focusgroup">Focus Group Data</button>
   <button class="tab-btn" data-view="detail">Category Detail</button>
+  <button class="tab-btn" data-view="actionlog">Action Log</button>
 </nav>
 
 <main>
@@ -444,6 +448,63 @@
     </div>
   </div>
 
+  <!-- ACTION LOG -->
+  <div class="view" id="view-actionlog">
+    <div id="alLockMsg" class="locked-msg" style="display:none;">View-only mode. Unlock editing to add or remove action log entries.</div>
+    <div class="card" id="alFormCard">
+      <h3>Add Action Log Entry</h3>
+      <form class="entry" id="alForm">
+        <div>
+          <label>Date</label>
+          <input type="date" id="al-date" required>
+        </div>
+        <div>
+          <label>Category</label>
+          <select id="al-category"></select>
+        </div>
+        <div class="full-width" style="grid-column: 1 / -1;">
+          <label>Issue</label>
+          <input type="text" id="al-issue" placeholder="What was raised" required>
+        </div>
+        <div>
+          <label>Owner</label>
+          <input type="text" id="al-owner" placeholder="Who's responsible" required>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="al-status">
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </div>
+        <div style="align-self:end;">
+          <button type="submit" class="btn">Add Entry</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Action Log</h3>
+      <div class="filter-row">
+        <select id="alFilterCategory"><option value="">All Categories</option></select>
+        <select id="alFilterStatus">
+          <option value="">All Statuses</option>
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Resolved">Resolved</option>
+        </select>
+        <button class="btn secondary" onclick="clearAlFilter()">Clear</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="alTable">
+          <thead><tr><th>Date</th><th>Category</th><th>Issue</th><th>Owner</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="alEmpty" style="display:none;">No action log entries yet.</div>
+    </div>
+  </div>
+
 </main>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -466,6 +527,7 @@ const EDIT_PASSCODE = "innovo2026";
 let editMode = false;
 let surveyData = [];
 let fgData = [];
+let actionLogData = [];
 let charts = {};
 
 function populateSelect(id, options) {
@@ -488,6 +550,11 @@ function initSelects() {
   const sfc = document.getElementById('svFilterCategory');
   CATEGORIES.concat([NPS_LABEL]).forEach(c => {
     const o = document.createElement('option'); o.value = c; o.textContent = c; sfc.appendChild(o);
+  });
+  populateSelect('al-category', CATEGORIES);
+  const alfc = document.getElementById('alFilterCategory');
+  CATEGORIES.forEach(c => {
+    const o = document.createElement('option'); o.value = c; o.textContent = c; alfc.appendChild(o);
   });
 }
 
@@ -518,6 +585,9 @@ async function loadData() {
   try {
     fgData = await sbRequest('focus_group_entries?select=*') || [];
   } catch (e) { console.error('Focus group load failed', e); fgData = []; }
+  try {
+    actionLogData = await sbRequest('action_log_entries?select=*') || [];
+  } catch (e) { console.error('Action log load failed', e); actionLogData = []; }
 }
 
 async function insertSurvey(entry) {
@@ -535,6 +605,14 @@ async function removeSurvey(id) {
 async function removeFg(id) {
   await sbRequest(`focus_group_entries?id=eq.${id}`, { method: 'DELETE' });
   fgData = fgData.filter(r => r.id !== id);
+}
+async function insertActionLog(entry) {
+  const [row] = await sbRequest('action_log_entries', { method: 'POST', body: JSON.stringify(entry) });
+  actionLogData.push(row);
+}
+async function removeActionLog(id) {
+  await sbRequest(`action_log_entries?id=eq.${id}`, { method: 'DELETE' });
+  actionLogData = actionLogData.filter(r => r.id !== id);
 }
 
 // ---------- Edit mode ----------
@@ -567,8 +645,11 @@ function updateLockUI() {
   document.getElementById('fgFormCard').style.display = editMode ? '' : 'none';
   document.getElementById('surveyLockMsg').style.display = editMode ? 'none' : '';
   document.getElementById('fgLockMsg').style.display = editMode ? 'none' : '';
+  document.getElementById('alFormCard').style.display = editMode ? '' : 'none';
+  document.getElementById('alLockMsg').style.display = editMode ? 'none' : '';
   renderSurveyTable();
   renderFgTable();
+  renderActionLogTable();
 }
 
 // ---------- Tabs ----------
@@ -669,6 +750,51 @@ document.getElementById('fgForm').addEventListener('submit', async (e) => {
   e.target.reset();
   renderAll();
 });
+
+// ---------- Action Log form ----------
+document.getElementById('alForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!editMode) return;
+  await insertActionLog({
+    date: document.getElementById('al-date').value,
+    category: document.getElementById('al-category').value,
+    issue: document.getElementById('al-issue').value,
+    owner: document.getElementById('al-owner').value,
+    status: document.getElementById('al-status').value
+  });
+  e.target.reset();
+  renderAll();
+});
+
+function renderActionLogTable() {
+  const tbody = document.querySelector('#alTable tbody');
+  tbody.innerHTML = '';
+  const catFilter = document.getElementById('alFilterCategory').value;
+  const statusFilter = document.getElementById('alFilterStatus').value;
+  let filtered = [...actionLogData].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  if (catFilter) filtered = filtered.filter(r => r.category === catFilter);
+  if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+  document.getElementById('alEmpty').style.display = filtered.length ? 'none' : '';
+  const statusClass = { 'Open': 'status-open', 'In Progress': 'status-progress', 'Resolved': 'status-resolved' };
+  filtered.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.date||''}</td><td>${row.category}</td><td>${row.issue||''}</td><td>${row.owner||''}</td>
+      <td><span class="badge ${statusClass[row.status]||''}">${row.status||''}</span></td>
+      <td>${editMode ? `<button class="del-btn" onclick="deleteActionLog(${row.id})">Remove</button>` : ''}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+async function deleteActionLog(id) {
+  await removeActionLog(id);
+  renderAll();
+}
+document.getElementById('alFilterCategory').addEventListener('change', renderActionLogTable);
+document.getElementById('alFilterStatus').addEventListener('change', renderActionLogTable);
+function clearAlFilter() {
+  document.getElementById('alFilterCategory').value = '';
+  document.getElementById('alFilterStatus').value = '';
+  renderActionLogTable();
+}
 
 function fillSamePatient() {
   if (!lastFgMeta) {
@@ -840,6 +966,7 @@ function renderChart(id, type, labels, datasets, extraOptions) {
 function renderAll() {
   renderSurveyTable();
   renderFgTable();
+  renderActionLogTable();
   renderOverview();
   if (document.getElementById('view-detail').classList.contains('active')) renderDetail();
 }
