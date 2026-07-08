@@ -190,10 +190,24 @@
 
   <!-- OVERVIEW -->
   <div class="view active" id="view-overview">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="filter-row" style="align-items:flex-end; margin-bottom:0;">
+        <div>
+          <label style="display:block; font-size:11.5px; color:var(--text-muted); margin-bottom:4px; font-weight:600;">From period</label>
+          <input type="month" id="overviewStart">
+        </div>
+        <div>
+          <label style="display:block; font-size:11.5px; color:var(--text-muted); margin-bottom:4px; font-weight:600;">To period</label>
+          <input type="month" id="overviewEnd">
+        </div>
+        <button class="btn secondary" onclick="clearOverviewFilter()">Clear filter</button>
+        <span id="overviewFilterStatus" style="font-size:12px; color:var(--text-muted); align-self:center;"></span>
+      </div>
+    </div>
     <div class="grid" id="overviewStats"></div>
     <div class="grid">
       <div class="card full-width">
-        <h3>Average Survey Score by Category (most recent period per category)</h3>
+        <h3>Average Survey Score by Category (most recent period per category, within filter)</h3>
         <div class="chart-wrap"><canvas id="surveyChart"></canvas></div>
       </div>
     </div>
@@ -224,14 +238,27 @@
           <input type="month" id="sf-period" required>
         </div>
         <div>
-          <label>Segment</label>
-          <select id="sf-segment">
-            <option>All Patients</option>
-            <option>SUD</option>
-            <option>MH</option>
-            <option>AMA-Risk</option>
-            <option>Male</option>
-            <option>Female</option>
+          <label>Program</label>
+          <select id="sf-program">
+            <option value="">All</option>
+            <option value="SUD">SUD</option>
+            <option value="MH">MH</option>
+          </select>
+        </div>
+        <div>
+          <label>Gender</label>
+          <select id="sf-gender">
+            <option value="">All</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div>
+          <label>AMA-Risk</label>
+          <select id="sf-ama">
+            <option value="">All</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
           </select>
         </div>
         <div>
@@ -252,10 +279,30 @@
       </form>
     </div>
     <div class="card">
+      <details>
+        <summary style="cursor:pointer; font-weight:600; color:var(--text-heading); font-family:var(--font-serif); font-size:15px;">Data Key</summary>
+        <div style="margin-top:12px; font-size:12.5px; line-height:1.6; color:var(--text-body);">
+          <p style="margin:0 0 8px 0;"><b>Program / Gender / AMA-Risk:</b> "All" means this entry is a combined average across that dimension (not filtered). A specific value (e.g. "SUD") means the score reflects only that slice of patients.</p>
+          <p style="margin:0 0 8px 0;"><b>Category:</b> one of the 10 tracked areas, or "Would Recommend (NPS)" — a standalone outcome metric, not part of the 10-category system.</p>
+          <p style="margin:0 0 8px 0;"><b>Avg Score:</b> average of 0-10 responses for that category, period, and segment slice.</p>
+          <p style="margin:0;"><b>Responses:</b> number of individual question-responses behind that average (not number of patients).</p>
+        </div>
+      </details>
+    </div>
+    <div class="card">
       <h3>Survey Entries</h3>
+      <div class="filter-row">
+        <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">From</label><input type="month" id="svFilterStart"></div>
+        <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">To</label><input type="month" id="svFilterEnd"></div>
+        <select id="svFilterProgram"><option value="">All Programs</option><option value="SUD">SUD</option><option value="MH">MH</option></select>
+        <select id="svFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option></select>
+        <select id="svFilterAma"><option value="">All AMA-Risk</option><option value="Yes">Yes</option><option value="No">No</option></select>
+        <select id="svFilterCategory"><option value="">All Categories</option></select>
+        <button class="btn secondary" onclick="clearSurveyFilter()">Clear</button>
+      </div>
       <div style="overflow-x:auto;">
         <table id="surveyTable">
-          <thead><tr><th>Period</th><th>Segment</th><th>Category</th><th>Avg Score</th><th>Responses</th><th></th></tr></thead>
+          <thead><tr><th>Period</th><th>Program</th><th>Gender</th><th>AMA-Risk</th><th>Category</th><th>Avg Score</th><th>Responses</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -266,6 +313,23 @@
   <!-- FOCUS GROUP DATA -->
   <div class="view" id="view-focusgroup">
     <div id="fgLockMsg" class="locked-msg" style="display:none;">View-only mode. Unlock editing to add or remove focus group entries.</div>
+    <div class="card">
+      <details>
+        <summary style="cursor:pointer; font-weight:600; color:var(--text-heading); font-family:var(--font-serif); font-size:15px;">Data Key</summary>
+        <div style="margin-top:12px; font-size:12.5px; line-height:1.6; color:var(--text-body);">
+          <p style="margin:0 0 8px 0;"><b>Category:</b> the same 10 tracked areas used in Survey Data (Medical, Nursing, Therapy/Clinical, Case Management, Recovery Support Staff, Environment/Facility, Peer/Community, Family Involvement, Discharge Planning, Program Structure).</p>
+          <p style="margin:0 0 4px 0;"><b>Tags:</b></p>
+          <p style="margin:0 0 4px 0 12px;">&bull; <b>Communication Gap</b> — information wasn't clearly conveyed or explained.</p>
+          <p style="margin:0 0 4px 0 12px;">&bull; <b>Unmet Expectation</b> — patient expected something that didn't happen.</p>
+          <p style="margin:0 0 4px 0 12px;">&bull; <b>Access/Availability</b> — staff or a resource wasn't available when needed.</p>
+          <p style="margin:0 0 4px 0 12px;">&bull; <b>Perceived Disrespect</b> — patient felt dismissed, judged, or treated without dignity.</p>
+          <p style="margin:0 0 4px 0 12px;">&bull; <b>Positive Standout</b> — a noteworthy positive experience worth highlighting.</p>
+          <p style="margin:0 0 8px 0 12px;">&bull; <b>Safety Concern</b> — triggers an immediate Discovery Report to clinical leadership, same day.</p>
+          <p style="margin:0 0 8px 0;"><b>Severity:</b> 1 = Minor, 2 = Moderate, 3 = Significant.</p>
+          <p style="margin:0;"><b>Escalate:</b> "Yes" means this response is routed as a same-day Discovery Report, separate from the regular monthly review.</p>
+        </div>
+      </details>
+    </div>
     <div class="card" id="fgFormCard">
       <h3>Add Focus Group Response</h3>
       <form class="entry" id="fgForm">
@@ -278,13 +342,24 @@
           <input type="text" id="fg-session" required>
         </div>
         <div>
-          <label>Segment</label>
-          <select id="fg-segment">
-            <option>AMA-Risk</option>
-            <option>SUD</option>
-            <option>MH</option>
-            <option>Male</option>
-            <option>Female</option>
+          <label>Program</label>
+          <select id="fg-program" required>
+            <option value="SUD">SUD</option>
+            <option value="MH">MH</option>
+          </select>
+        </div>
+        <div>
+          <label>Gender</label>
+          <select id="fg-gender" required>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div>
+          <label>AMA-Risk</label>
+          <select id="fg-ama" required>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
           </select>
         </div>
         <div>
@@ -326,12 +401,17 @@
     <div class="card">
       <h3>Focus Group Entries</h3>
       <div class="filter-row">
-        <select id="fgFilterSegment"><option value="">All Segments</option></select>
+        <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">From date</label><input type="date" id="fgFilterDateStart"></div>
+        <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">To date</label><input type="date" id="fgFilterDateEnd"></div>
+        <select id="fgFilterProgram"><option value="">All Programs</option><option value="SUD">SUD</option><option value="MH">MH</option></select>
+        <select id="fgFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option></select>
+        <select id="fgFilterAma"><option value="">All AMA-Risk</option><option value="Yes">Yes</option><option value="No">No</option></select>
         <select id="fgFilterCategory"><option value="">All Categories</option></select>
+        <button class="btn secondary" onclick="clearFgFilter()">Clear</button>
       </div>
       <div style="overflow-x:auto;">
         <table id="fgTable">
-          <thead><tr><th>Date</th><th>Session</th><th>Segment</th><th>Patient</th><th>Category</th><th>Tag</th><th>Sev.</th><th>Context</th><th>Escalate</th><th></th></tr></thead>
+          <thead><tr><th>Date</th><th>Session</th><th>Program</th><th>Gender</th><th>AMA-Risk</th><th>Patient</th><th>Category</th><th>Tag</th><th>Sev.</th><th>Context</th><th>Escalate</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -376,6 +456,7 @@
 
 <script>
 const CATEGORIES = ["Medical","Nursing","Therapy/Clinical","Case Management","Recovery Support Staff","Environment/Facility","Peer/Community","Family Involvement","Discharge Planning","Program Structure"];
+const NPS_LABEL = "Would Recommend (NPS - not a category)";
 const TAGS = ["Communication Gap","Unmet Expectation","Access/Availability","Perceived Disrespect","Positive Standout","Safety Concern"];
 const EDIT_PASSCODE = "innovo2026";
 
@@ -391,16 +472,19 @@ function populateSelect(id, options) {
 
 function initSelects() {
   populateSelect('sf-category', CATEGORIES);
+  const npsOpt = document.createElement('option');
+  npsOpt.value = NPS_LABEL; npsOpt.textContent = NPS_LABEL;
+  document.getElementById('sf-category').appendChild(npsOpt);
   populateSelect('fg-category', CATEGORIES);
   populateSelect('fg-tag', TAGS);
   populateSelect('detailCategorySelect', CATEGORIES);
-  const fs = document.getElementById('fgFilterSegment');
-  ["AMA-Risk","SUD","MH","Male","Female"].forEach(s => {
-    const o = document.createElement('option'); o.value = s; o.textContent = s; fs.appendChild(o);
-  });
   const fc = document.getElementById('fgFilterCategory');
   CATEGORIES.forEach(c => {
     const o = document.createElement('option'); o.value = c; o.textContent = c; fc.appendChild(o);
+  });
+  const sfc = document.getElementById('svFilterCategory');
+  CATEGORIES.concat([NPS_LABEL]).forEach(c => {
+    const o = document.createElement('option'); o.value = c; o.textContent = c; sfc.appendChild(o);
   });
 }
 
@@ -501,7 +585,9 @@ document.getElementById('surveyForm').addEventListener('submit', async (e) => {
   if (!editMode) return;
   await insertSurvey({
     period: document.getElementById('sf-period').value,
-    segment: document.getElementById('sf-segment').value,
+    program: document.getElementById('sf-program').value || null,
+    gender: document.getElementById('sf-gender').value || null,
+    ama_risk: document.getElementById('sf-ama').value || null,
     category: document.getElementById('sf-category').value,
     score: parseFloat(document.getElementById('sf-score').value),
     count: parseInt(document.getElementById('sf-count').value)
@@ -513,11 +599,23 @@ document.getElementById('surveyForm').addEventListener('submit', async (e) => {
 function renderSurveyTable() {
   const tbody = document.querySelector('#surveyTable tbody');
   tbody.innerHTML = '';
-  const sorted = [...surveyData].sort((a,b) => b.period.localeCompare(a.period));
+  const startVal = document.getElementById('svFilterStart').value;
+  const endVal = document.getElementById('svFilterEnd').value;
+  const progFilter = document.getElementById('svFilterProgram').value;
+  const genderFilter = document.getElementById('svFilterGender').value;
+  const amaFilter = document.getElementById('svFilterAma').value;
+  const catFilter = document.getElementById('svFilterCategory').value;
+  let sorted = [...surveyData].sort((a,b) => b.period.localeCompare(a.period));
+  if (startVal) sorted = sorted.filter(r => r.period >= startVal);
+  if (endVal) sorted = sorted.filter(r => r.period <= endVal);
+  if (progFilter) sorted = sorted.filter(r => (r.program||'') === progFilter);
+  if (genderFilter) sorted = sorted.filter(r => (r.gender||'') === genderFilter);
+  if (amaFilter) sorted = sorted.filter(r => (r.ama_risk||'') === amaFilter);
+  if (catFilter) sorted = sorted.filter(r => r.category === catFilter);
   document.getElementById('surveyEmpty').style.display = sorted.length ? 'none' : '';
   sorted.forEach(row => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${row.period}</td><td>${row.segment}</td><td>${row.category}</td><td>${Number(row.score).toFixed(1)}</td><td>${row.count}</td>
+    tr.innerHTML = `<td>${row.period}</td><td>${row.program||'All'}</td><td>${row.gender||'All'}</td><td>${row.ama_risk||'All'}</td><td>${row.category}</td><td>${Number(row.score).toFixed(1)}</td><td>${row.count}</td>
       <td>${editMode ? `<button class="del-btn" onclick="deleteSurvey(${row.id})">Remove</button>` : ''}</td>`;
     tbody.appendChild(tr);
   });
@@ -525,6 +623,21 @@ function renderSurveyTable() {
 async function deleteSurvey(id) {
   await removeSurvey(id);
   renderAll();
+}
+document.getElementById('svFilterStart').addEventListener('change', renderSurveyTable);
+document.getElementById('svFilterEnd').addEventListener('change', renderSurveyTable);
+document.getElementById('svFilterProgram').addEventListener('change', renderSurveyTable);
+document.getElementById('svFilterGender').addEventListener('change', renderSurveyTable);
+document.getElementById('svFilterAma').addEventListener('change', renderSurveyTable);
+document.getElementById('svFilterCategory').addEventListener('change', renderSurveyTable);
+function clearSurveyFilter() {
+  document.getElementById('svFilterStart').value = '';
+  document.getElementById('svFilterEnd').value = '';
+  document.getElementById('svFilterProgram').value = '';
+  document.getElementById('svFilterGender').value = '';
+  document.getElementById('svFilterAma').value = '';
+  document.getElementById('svFilterCategory').value = '';
+  renderSurveyTable();
 }
 
 // ---------- Focus group form ----------
@@ -534,7 +647,9 @@ document.getElementById('fgForm').addEventListener('submit', async (e) => {
   await insertFg({
     date: document.getElementById('fg-date').value,
     session: document.getElementById('fg-session').value,
-    segment: document.getElementById('fg-segment').value,
+    program: document.getElementById('fg-program').value,
+    gender: document.getElementById('fg-gender').value,
+    ama_risk: document.getElementById('fg-ama').value,
     patient: document.getElementById('fg-patient').value,
     category: document.getElementById('fg-category').value,
     tag: document.getElementById('fg-tag').value,
@@ -549,16 +664,24 @@ document.getElementById('fgForm').addEventListener('submit', async (e) => {
 function renderFgTable() {
   const tbody = document.querySelector('#fgTable tbody');
   tbody.innerHTML = '';
-  const segFilter = document.getElementById('fgFilterSegment').value;
+  const dateStart = document.getElementById('fgFilterDateStart').value;
+  const dateEnd = document.getElementById('fgFilterDateEnd').value;
+  const progFilter = document.getElementById('fgFilterProgram').value;
+  const genderFilter = document.getElementById('fgFilterGender').value;
+  const amaFilter = document.getElementById('fgFilterAma').value;
   const catFilter = document.getElementById('fgFilterCategory').value;
   let filtered = [...fgData].sort((a,b) => (b.date||'').localeCompare(a.date||''));
-  if (segFilter) filtered = filtered.filter(r => r.segment === segFilter);
+  if (dateStart) filtered = filtered.filter(r => r.date && r.date >= dateStart);
+  if (dateEnd) filtered = filtered.filter(r => r.date && r.date <= dateEnd);
+  if (progFilter) filtered = filtered.filter(r => r.program === progFilter);
+  if (genderFilter) filtered = filtered.filter(r => r.gender === genderFilter);
+  if (amaFilter) filtered = filtered.filter(r => r.ama_risk === amaFilter);
   if (catFilter) filtered = filtered.filter(r => r.category === catFilter);
   document.getElementById('fgEmpty').style.display = filtered.length ? 'none' : '';
   filtered.forEach(row => {
     const tr = document.createElement('tr');
     if (row.escalate === 'Y') tr.classList.add('escalated');
-    tr.innerHTML = `<td>${row.date}</td><td>${row.session}</td><td>${row.segment}</td><td>${row.patient}</td>
+    tr.innerHTML = `<td>${row.date}</td><td>${row.session}</td><td>${row.program}</td><td>${row.gender}</td><td>${row.ama_risk}</td><td>${row.patient}</td>
       <td>${row.category}</td><td>${row.tag}</td><td><span class="badge sev-${row.severity}">${row.severity}</span></td>
       <td>${row.context||''}</td><td>${row.escalate === 'Y' ? '⚠ YES' : 'No'}</td>
       <td>${editMode ? `<button class="del-btn" onclick="deleteFg(${row.id})">Remove</button>` : ''}</td>`;
@@ -569,44 +692,85 @@ async function deleteFg(id) {
   await removeFg(id);
   renderAll();
 }
-document.getElementById('fgFilterSegment').addEventListener('change', renderFgTable);
+document.getElementById('fgFilterDateStart').addEventListener('change', renderFgTable);
+document.getElementById('fgFilterDateEnd').addEventListener('change', renderFgTable);
+document.getElementById('fgFilterProgram').addEventListener('change', renderFgTable);
+document.getElementById('fgFilterGender').addEventListener('change', renderFgTable);
+document.getElementById('fgFilterAma').addEventListener('change', renderFgTable);
 document.getElementById('fgFilterCategory').addEventListener('change', renderFgTable);
+function clearFgFilter() {
+  document.getElementById('fgFilterDateStart').value = '';
+  document.getElementById('fgFilterDateEnd').value = '';
+  document.getElementById('fgFilterProgram').value = '';
+  document.getElementById('fgFilterGender').value = '';
+  document.getElementById('fgFilterAma').value = '';
+  document.getElementById('fgFilterCategory').value = '';
+  renderFgTable();
+}
+
+document.getElementById('overviewStart').addEventListener('change', renderOverview);
+document.getElementById('overviewEnd').addEventListener('change', renderOverview);
+function clearOverviewFilter() {
+  document.getElementById('overviewStart').value = '';
+  document.getElementById('overviewEnd').value = '';
+  renderOverview();
+}
 
 // ---------- Overview ----------
 function renderOverview() {
+  const startVal = document.getElementById('overviewStart').value; // "YYYY-MM" or ""
+  const endVal = document.getElementById('overviewEnd').value;
+  const inRange = (period) => {
+    if (!period) return false;
+    if (startVal && period < startVal) return false;
+    if (endVal && period > endVal) return false;
+    return true;
+  };
+  const statusEl = document.getElementById('overviewFilterStatus');
+  statusEl.textContent = (startVal || endVal)
+    ? `Showing ${startVal || 'earliest'} to ${endVal || 'latest'}`
+    : 'Showing all data';
+
+  const filteredSurvey = (startVal || endVal) ? surveyData.filter(r => inRange(r.period)) : surveyData;
+  const filteredFg = fgData; // focus group entries aren't period-tagged the same way; left unfiltered for now
+
   const statsEl = document.getElementById('overviewStats');
-  const totalResponses = surveyData.reduce((sum, r) => sum + r.count, 0);
-  const avgAll = surveyData.length ? (surveyData.reduce((s,r) => s + r.score * r.count, 0) / (totalResponses || 1)).toFixed(1) : '—';
-  const totalFg = fgData.length;
-  const escalations = fgData.filter(r => r.escalate === 'Y').length;
+  const catOnly = filteredSurvey.filter(r => r.category !== NPS_LABEL);
+  const totalResponses = catOnly.reduce((sum, r) => sum + r.count, 0);
+  const avgAll = catOnly.length ? (catOnly.reduce((s,r) => s + r.score * r.count, 0) / (totalResponses || 1)).toFixed(1) : '—';
+  const totalFg = filteredFg.length;
+  const escalations = filteredFg.filter(r => r.escalate === 'Y').length;
+  const npsRows = filteredSurvey.filter(r => r.category === NPS_LABEL).sort((a,b) => b.period.localeCompare(a.period));
+  const latestNps = npsRows.length ? npsRows[0].score.toFixed(1) : '—';
   statsEl.innerHTML = `
     <div class="card"><div class="stat-label">Overall Avg. Survey Score</div><div class="stat-value">${avgAll}</div><div class="stat-sub">${totalResponses} responses recorded</div></div>
-    <div class="card"><div class="stat-label">Focus Group Data Points</div><div class="stat-value">${totalFg}</div><div class="stat-sub">${new Set(fgData.map(r=>r.session)).size} sessions logged</div></div>
+    <div class="card"><div class="stat-label">Would Recommend (NPS)</div><div class="stat-value">${latestNps}</div><div class="stat-sub">${npsRows.length ? 'Most recent period: ' + npsRows[0].period : 'No data yet'}</div></div>
+    <div class="card"><div class="stat-label">Focus Group Data Points</div><div class="stat-value">${totalFg}</div><div class="stat-sub">${new Set(filteredFg.map(r=>r.session)).size} sessions logged</div></div>
     <div class="card"><div class="stat-label">Safety Escalations</div><div class="stat-value" style="color:${escalations>0?'#B3453A':'#12142E'}">${escalations}</div><div class="stat-sub">Discovery reports triggered</div></div>
   `;
 
-  // Most recent score per category
+  // Most recent score per category (within filtered range)
   const latestByCategory = {};
   CATEGORIES.forEach(c => {
-    const rows = surveyData.filter(r => r.category === c).sort((a,b) => b.period.localeCompare(a.period));
+    const rows = filteredSurvey.filter(r => r.category === c).sort((a,b) => b.period.localeCompare(a.period));
     latestByCategory[c] = rows.length ? rows[0].score : null;
   });
   renderChart('surveyChart', 'bar', CATEGORIES, [{
     label: 'Avg Score', data: CATEGORIES.map(c => latestByCategory[c]), backgroundColor: '#2F6AB2', borderRadius: 4
   }], { scales: { y: { min: 0, max: 10 } } });
 
-  const catCounts = CATEGORIES.map(c => fgData.filter(r => r.category === c).length);
+  const catCounts = CATEGORIES.map(c => filteredFg.filter(r => r.category === c).length);
   renderChart('categoryTagChart', 'bar', CATEGORIES, [{
     label: 'Themes', data: catCounts, backgroundColor: '#12142E', borderRadius: 4
   }], { indexAxis: 'y' });
 
-  const tagCounts = TAGS.map(t => fgData.filter(r => r.tag === t).length);
+  const tagCounts = TAGS.map(t => filteredFg.filter(r => r.tag === t).length);
   renderChart('tagChart', 'doughnut', TAGS, [{
     data: tagCounts, backgroundColor: ['#2F6AB2','#7BD3E8','#12142E','#D6A32C','#8C9FD9','#B3453A']
   }], {});
 
   const escList = document.getElementById('escalationList');
-  const escRows = fgData.filter(r => r.escalate === 'Y').sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const escRows = filteredFg.filter(r => r.escalate === 'Y').sort((a,b) => (b.date||'').localeCompare(a.date||''));
   if (!escRows.length) {
     escList.innerHTML = '<div class="empty-state">No safety escalations logged.</div>';
   } else {
@@ -633,8 +797,8 @@ function renderDetail() {
   const commentsEl = document.getElementById('detailComments');
   const withContext = fgRows.filter(r => r.context).sort((a,b) => (b.date||'').localeCompare(a.date||''));
   commentsEl.innerHTML = withContext.length
-    ? `<table><thead><tr><th>Date</th><th>Segment</th><th>Tag</th><th>Sev.</th><th>Context</th></tr></thead><tbody>
-        ${withContext.map(r => `<tr ${r.escalate==='Y' ? 'class="escalated"' : ''}><td>${r.date}</td><td>${r.segment}</td><td>${r.tag}</td><td><span class="badge sev-${r.severity}">${r.severity}</span></td><td>${r.context}</td></tr>`).join('')}
+    ? `<table><thead><tr><th>Date</th><th>Program</th><th>Gender</th><th>AMA-Risk</th><th>Tag</th><th>Sev.</th><th>Context</th></tr></thead><tbody>
+        ${withContext.map(r => `<tr ${r.escalate==='Y' ? 'class="escalated"' : ''}><td>${r.date}</td><td>${r.program}</td><td>${r.gender}</td><td>${r.ama_risk}</td><td>${r.tag}</td><td><span class="badge sev-${r.severity}">${r.severity}</span></td><td>${r.context}</td></tr>`).join('')}
       </tbody></table>`
     : '<div class="empty-state">No focus group comments recorded for this category yet.</div>';
 }
