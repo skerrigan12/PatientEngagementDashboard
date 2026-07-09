@@ -239,7 +239,7 @@
 
   <!-- SURVEY DATA -->
   <div class="view" id="view-survey">
-    <div id="surveyLockMsg" class="locked-msg" style="display:none;">View-only mode. Unlock editing to add or remove survey entries.</div>
+    <div id="surveyLockMsg" class="locked-msg" style="display:none;">View-only mode. Unlock editing to add or remove survey or discharge entries.</div>
     <div class="card" id="surveyFormCard">
       <h3>Add Survey Score Entry</h3>
       <form class="entry" id="surveyForm">
@@ -287,6 +287,54 @@
           <button type="submit" class="btn">Add Entry</button>
         </div>
       </form>
+    </div>
+    <div class="card" id="dischargeFormCard">
+      <h3>Add Discharge Count</h3>
+      <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px;">Feeds the Response Rate stat on Overview. Enter as often as you pull the count (e.g. weekly) — multiple entries for the same period are added together.</p>
+      <form class="entry" id="dischargeForm">
+        <div>
+          <label>Period (e.g. 2026-07)</label>
+          <input type="month" id="dc-period" required>
+        </div>
+        <div>
+          <label>Program</label>
+          <select id="dc-program">
+            <option value="">All</option>
+            <option value="SUD">SUD</option>
+            <option value="MH">MH</option>
+          </select>
+        </div>
+        <div>
+          <label>Gender</label>
+          <select id="dc-gender">
+            <option value="">All</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div>
+          <label>AMA-Risk</label>
+          <select id="dc-ama">
+            <option value="">All</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+        <div>
+          <label>Discharge Count</label>
+          <input type="number" id="dc-count" min="1" required>
+        </div>
+        <div style="align-self:end;">
+          <button type="submit" class="btn">Add Entry</button>
+        </div>
+      </form>
+      <div style="overflow-x:auto;margin-top:12px;">
+        <table id="dischargeTable">
+          <thead><tr><th>Period</th><th>Program</th><th>Gender</th><th>AMA-Risk</th><th>Count</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="dischargeEmpty" style="display:none;">No discharge counts entered yet.</div>
     </div>
     <div class="card">
       <details>
@@ -540,6 +588,7 @@ let editMode = false;
 let surveyData = [];
 let fgData = [];
 let actionLogData = [];
+let dischargeData = [];
 let charts = {};
 
 function populateSelect(id, options) {
@@ -601,6 +650,9 @@ async function loadData() {
   try {
     actionLogData = await sbRequest('action_log_entries?select=*') || [];
   } catch (e) { console.error('Action log load failed', e); actionLogData = []; }
+  try {
+    dischargeData = await sbRequest('discharge_counts?select=*') || [];
+  } catch (e) { console.error('Discharge counts load failed', e); dischargeData = []; }
 }
 
 async function insertSurvey(entry) {
@@ -626,6 +678,14 @@ async function insertActionLog(entry) {
 async function removeActionLog(id) {
   await sbRequest(`action_log_entries?id=eq.${id}`, { method: 'DELETE' });
   actionLogData = actionLogData.filter(r => r.id !== id);
+}
+async function insertDischarge(entry) {
+  const [row] = await sbRequest('discharge_counts', { method: 'POST', body: JSON.stringify(entry) });
+  dischargeData.push(row);
+}
+async function removeDischarge(id) {
+  await sbRequest(`discharge_counts?id=eq.${id}`, { method: 'DELETE' });
+  dischargeData = dischargeData.filter(r => r.id !== id);
 }
 
 // ---------- Edit mode ----------
@@ -655,6 +715,7 @@ function updateLockUI() {
   const btn = document.getElementById('lockBtn');
   btn.textContent = editMode ? '🔓 Editing Enabled' : '🔒 View Only';
   document.getElementById('surveyFormCard').style.display = editMode ? '' : 'none';
+  document.getElementById('dischargeFormCard').style.display = editMode ? '' : 'none';
   document.getElementById('fgFormCard').style.display = editMode ? '' : 'none';
   document.getElementById('surveyLockMsg').style.display = editMode ? 'none' : '';
   document.getElementById('fgLockMsg').style.display = editMode ? 'none' : '';
@@ -664,6 +725,7 @@ function updateLockUI() {
   renderSurveyTable();
   renderFgTable();
   renderActionLogTable();
+  renderDischargeTable();
 }
 
 // ---------- Tabs ----------
@@ -736,6 +798,38 @@ function clearSurveyFilter() {
   document.getElementById('svFilterAma').value = '';
   document.getElementById('svFilterCategory').value = '';
   renderSurveyTable();
+}
+
+// ---------- Discharge counts form ----------
+document.getElementById('dischargeForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!editMode) return;
+  await insertDischarge({
+    period: document.getElementById('dc-period').value,
+    program: document.getElementById('dc-program').value || null,
+    gender: document.getElementById('dc-gender').value || null,
+    ama_risk: document.getElementById('dc-ama').value || null,
+    count: parseInt(document.getElementById('dc-count').value)
+  });
+  e.target.reset();
+  renderAll();
+});
+
+function renderDischargeTable() {
+  const tbody = document.querySelector('#dischargeTable tbody');
+  tbody.innerHTML = '';
+  const sorted = [...dischargeData].sort((a,b) => (b.period||'').localeCompare(a.period||''));
+  document.getElementById('dischargeEmpty').style.display = sorted.length ? 'none' : '';
+  sorted.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.period}</td><td>${row.program||'All'}</td><td>${row.gender||'All'}</td><td>${row.ama_risk||'All'}</td><td>${row.count}</td>
+      <td>${editMode ? `<button class="del-btn" onclick="deleteDischarge(${row.id})">Remove</button>` : ''}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+async function deleteDischarge(id) {
+  await removeDischarge(id);
+  renderAll();
 }
 
 // ---------- Focus group form ----------
@@ -922,6 +1016,7 @@ function renderOverview() {
 
   const filteredSurvey = (startVal || endVal) ? surveyData.filter(r => inRange(r.period)) : surveyData;
   const filteredFg = fgData; // focus group entries aren't period-tagged the same way; left unfiltered for now
+  const filteredDischarge = (startVal || endVal) ? dischargeData.filter(r => inRange(r.period)) : dischargeData;
 
   const statsEl = document.getElementById('overviewStats');
   const catOnly = filteredSurvey.filter(r => r.category !== NPS_LABEL);
@@ -931,11 +1026,29 @@ function renderOverview() {
   const escalations = filteredFg.filter(r => r.escalate === 'Y').length;
   const npsRows = filteredSurvey.filter(r => r.category === NPS_LABEL).sort((a,b) => b.period.localeCompare(a.period));
   const latestNps = npsRows.length ? npsRows[0].score.toFixed(1) : '—';
+
+  // Response rate = survey responses / discharges, for the same filtered period range.
+  // Uses category-only responses (excludes the standalone NPS metric) to match "responses" as tracked elsewhere.
+  const totalDischarges = filteredDischarge.reduce((sum, r) => sum + r.count, 0);
+  const responseRate = totalDischarges > 0 ? Math.round((totalResponses / totalDischarges) * 100) + '%' : '—';
+  const responseRateSub = totalDischarges > 0 ? `${totalResponses} responses / ${totalDischarges} discharges` : 'No discharge counts entered yet';
+
+  // AMA-risk breakdown: requires both survey and discharge entries segmented by AMA-Risk (not just "All") to be meaningful.
+  const amaResponses = catOnly.filter(r => r.ama_risk === 'Yes').reduce((s,r) => s + r.count, 0);
+  const amaDischarges = filteredDischarge.filter(r => r.ama_risk === 'Yes').reduce((s,r) => s + r.count, 0);
+  const amaRate = amaDischarges > 0 ? Math.round((amaResponses / amaDischarges) * 100) + '%' : '—';
+  const nonAmaResponses = catOnly.filter(r => r.ama_risk === 'No').reduce((s,r) => s + r.count, 0);
+  const nonAmaDischarges = filteredDischarge.filter(r => r.ama_risk === 'No').reduce((s,r) => s + r.count, 0);
+  const nonAmaRate = nonAmaDischarges > 0 ? Math.round((nonAmaResponses / nonAmaDischarges) * 100) + '%' : '—';
+  const amaSub = (amaDischarges > 0 || nonAmaDischarges > 0) ? `Non-AMA-Risk: ${nonAmaRate}` : 'Needs AMA-Risk-segmented entries';
+
   statsEl.innerHTML = `
     <div class="card"><div class="stat-label">Overall Avg. Survey Score</div><div class="stat-value">${avgAll}</div><div class="stat-sub">${totalResponses} responses recorded</div></div>
     <div class="card"><div class="stat-label">Would Recommend (NPS)</div><div class="stat-value">${latestNps}</div><div class="stat-sub">${npsRows.length ? 'Most recent period: ' + npsRows[0].period : 'No data yet'}</div></div>
     <div class="card"><div class="stat-label">Focus Group Data Points</div><div class="stat-value">${totalFg}</div><div class="stat-sub">${new Set(filteredFg.map(r=>r.session)).size} sessions logged</div></div>
     <div class="card"><div class="stat-label">Safety Escalations</div><div class="stat-value" style="color:${escalations>0?'#B3453A':'#12142E'}">${escalations}</div><div class="stat-sub">Discovery reports triggered</div></div>
+    <div class="card"><div class="stat-label">Response Rate</div><div class="stat-value">${responseRate}</div><div class="stat-sub">${responseRateSub}</div></div>
+    <div class="card"><div class="stat-label">AMA-Risk Response Rate</div><div class="stat-value">${amaRate}</div><div class="stat-sub">${amaSub}</div></div>
   `;
 
   // Most recent score per category (within filtered range)
@@ -1015,6 +1128,7 @@ function renderAll() {
   renderSurveyTable();
   renderFgTable();
   renderActionLogTable();
+  renderDischargeTable();
   renderOverview();
   if (document.getElementById('view-detail').classList.contains('active')) renderDetail();
 }
