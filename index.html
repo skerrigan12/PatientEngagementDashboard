@@ -589,11 +589,15 @@ let surveyData = [];
 let fgData = [];
 let actionLogData = [];
 let dischargeData = [];
+let editingActionLogId = null;
 let charts = {};
 
 function populateSelect(id, options) {
   const el = document.getElementById(id);
   el.innerHTML = options.map(o => `<option value="${o}">${o}</option>`).join('');
+}
+function escapeAttr(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function initSurveyBulkRows() {
@@ -692,6 +696,11 @@ async function removeActionLog(id) {
   await sbRequest(`action_log_entries?id=eq.${id}`, { method: 'DELETE' });
   actionLogData = actionLogData.filter(r => r.id !== id);
 }
+async function updateActionLog(id, changes) {
+  const [row] = await sbRequest(`action_log_entries?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(changes) });
+  const idx = actionLogData.findIndex(r => r.id === id);
+  if (idx !== -1) actionLogData[idx] = row;
+}
 async function insertDischarge(entry) {
   const [row] = await sbRequest('discharge_counts', { method: 'POST', body: JSON.stringify(entry) });
   dischargeData.push(row);
@@ -705,6 +714,7 @@ async function removeDischarge(id) {
 function toggleEditMode() {
   if (editMode) {
     editMode = false;
+    editingActionLogId = null;
     updateLockUI();
   } else {
     document.getElementById('modalTitle').textContent = 'Enter Passcode to Edit';
@@ -947,13 +957,49 @@ function renderActionLogTable() {
   if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
   document.getElementById('alEmpty').style.display = filtered.length ? 'none' : '';
   const statusClass = { 'Open': 'status-open', 'In Progress': 'status-progress', 'Resolved': 'status-resolved' };
+  const statuses = ['Open', 'In Progress', 'Resolved'];
   filtered.forEach(row => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${row.date||''}</td><td>${row.category}</td><td>${row.issue||''}</td><td>${row.owner||''}</td>
-      <td><span class="badge ${statusClass[row.status]||''}">${row.status||''}</span></td>
-      <td>${editMode ? `<button class="del-btn" onclick="deleteActionLog(${row.id})">Remove</button>` : ''}</td>`;
+    if (editMode && row.id === editingActionLogId) {
+      const catOptions = CATEGORIES.map(c => `<option value="${escapeAttr(c)}" ${c === row.category ? 'selected' : ''}>${c}</option>`).join('');
+      const statusOptions = statuses.map(s => `<option value="${s}" ${s === row.status ? 'selected' : ''}>${s}</option>`).join('');
+      tr.innerHTML = `
+        <td><input type="date" id="al-edit-date-${row.id}" value="${escapeAttr(row.date)}" style="width:130px;"></td>
+        <td><select id="al-edit-category-${row.id}" style="width:150px;">${catOptions}</select></td>
+        <td><input type="text" id="al-edit-issue-${row.id}" value="${escapeAttr(row.issue)}" style="width:180px;"></td>
+        <td><input type="text" id="al-edit-owner-${row.id}" value="${escapeAttr(row.owner)}" style="width:120px;"></td>
+        <td><select id="al-edit-status-${row.id}" style="width:110px;">${statusOptions}</select></td>
+        <td style="white-space:nowrap;">
+          <button class="btn" style="padding:4px 8px;font-size:12px;" onclick="saveEditActionLog(${row.id})">Save</button>
+          <button class="btn secondary" style="padding:4px 8px;font-size:12px;" onclick="cancelEditActionLog()">Cancel</button>
+        </td>`;
+    } else {
+      tr.innerHTML = `<td>${row.date||''}</td><td>${row.category}</td><td>${row.issue||''}</td><td>${row.owner||''}</td>
+        <td><span class="badge ${statusClass[row.status]||''}">${row.status||''}</span></td>
+        <td style="white-space:nowrap;">${editMode ? `<button class="btn secondary" style="padding:4px 8px;font-size:12px;margin-right:4px;" onclick="startEditActionLog(${row.id})">Edit</button><button class="del-btn" onclick="deleteActionLog(${row.id})">Remove</button>` : ''}</td>`;
+    }
     tbody.appendChild(tr);
   });
+}
+function startEditActionLog(id) {
+  editingActionLogId = id;
+  renderActionLogTable();
+}
+function cancelEditActionLog() {
+  editingActionLogId = null;
+  renderActionLogTable();
+}
+async function saveEditActionLog(id) {
+  const changes = {
+    date: document.getElementById(`al-edit-date-${id}`).value,
+    category: document.getElementById(`al-edit-category-${id}`).value,
+    issue: document.getElementById(`al-edit-issue-${id}`).value,
+    owner: document.getElementById(`al-edit-owner-${id}`).value,
+    status: document.getElementById(`al-edit-status-${id}`).value
+  };
+  await updateActionLog(id, changes);
+  editingActionLogId = null;
+  renderActionLogTable();
 }
 async function deleteActionLog(id) {
   await removeActionLog(id);
