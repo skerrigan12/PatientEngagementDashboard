@@ -1033,22 +1033,12 @@ function renderOverview() {
   const responseRate = totalDischarges > 0 ? Math.round((totalResponses / totalDischarges) * 100) + '%' : '—';
   const responseRateSub = totalDischarges > 0 ? `${totalResponses} responses / ${totalDischarges} discharges` : 'No discharge counts entered yet';
 
-  // AMA-risk breakdown: requires both survey and discharge entries segmented by AMA-Risk (not just "All") to be meaningful.
-  const amaResponses = catOnly.filter(r => r.ama_risk === 'Yes').reduce((s,r) => s + r.count, 0);
-  const amaDischarges = filteredDischarge.filter(r => r.ama_risk === 'Yes').reduce((s,r) => s + r.count, 0);
-  const amaRate = amaDischarges > 0 ? Math.round((amaResponses / amaDischarges) * 100) + '%' : '—';
-  const nonAmaResponses = catOnly.filter(r => r.ama_risk === 'No').reduce((s,r) => s + r.count, 0);
-  const nonAmaDischarges = filteredDischarge.filter(r => r.ama_risk === 'No').reduce((s,r) => s + r.count, 0);
-  const nonAmaRate = nonAmaDischarges > 0 ? Math.round((nonAmaResponses / nonAmaDischarges) * 100) + '%' : '—';
-  const amaSub = (amaDischarges > 0 || nonAmaDischarges > 0) ? `Non-AMA-Risk: ${nonAmaRate}` : 'Needs AMA-Risk-segmented entries';
-
   statsEl.innerHTML = `
     <div class="card"><div class="stat-label">Overall Avg. Survey Score</div><div class="stat-value">${avgAll}</div><div class="stat-sub">${totalResponses} responses recorded</div></div>
     <div class="card"><div class="stat-label">Would Recommend (NPS)</div><div class="stat-value">${latestNps}</div><div class="stat-sub">${npsRows.length ? 'Most recent period: ' + npsRows[0].period : 'No data yet'}</div></div>
     <div class="card"><div class="stat-label">Focus Group Data Points</div><div class="stat-value">${totalFg}</div><div class="stat-sub">${new Set(filteredFg.map(r=>r.session)).size} sessions logged</div></div>
     <div class="card"><div class="stat-label">Safety Escalations</div><div class="stat-value" style="color:${escalations>0?'#B3453A':'#12142E'}">${escalations}</div><div class="stat-sub">Discovery reports triggered</div></div>
     <div class="card"><div class="stat-label">Response Rate</div><div class="stat-value">${responseRate}</div><div class="stat-sub">${responseRateSub}</div></div>
-    <div class="card"><div class="stat-label">AMA-Risk Response Rate</div><div class="stat-value">${amaRate}</div><div class="stat-sub">${amaSub}</div></div>
   `;
 
   // Most recent score per category (within filtered range)
