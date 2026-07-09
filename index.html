@@ -241,50 +241,48 @@
   <div class="view" id="view-survey">
     <div id="surveyLockMsg" class="locked-msg" style="display:none;">View-only mode. Unlock editing to add or remove survey or discharge entries.</div>
     <div class="card" id="surveyFormCard">
-      <h3>Add Survey Score Entry</h3>
-      <form class="entry" id="surveyForm">
-        <div>
-          <label>Period (e.g. 2026-07)</label>
-          <input type="month" id="sf-period" required>
+      <h3>Add Survey Score Entries</h3>
+      <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px;">One period and segment, all categories at once. Leave a category's score and count blank to skip it for this submission.</p>
+      <form id="surveyForm">
+        <div class="entry">
+          <div>
+            <label>Period (e.g. 2026-07)</label>
+            <input type="month" id="sf-period" required>
+          </div>
+          <div>
+            <label>Program</label>
+            <select id="sf-program">
+              <option value="">All</option>
+              <option value="SUD">SUD</option>
+              <option value="MH">MH</option>
+            </select>
+          </div>
+          <div>
+            <label>Gender</label>
+            <select id="sf-gender">
+              <option value="">All</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label>AMA-Risk</label>
+            <select id="sf-ama">
+              <option value="">All</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label>Program</label>
-          <select id="sf-program">
-            <option value="">All</option>
-            <option value="SUD">SUD</option>
-            <option value="MH">MH</option>
-          </select>
+        <div style="overflow-x:auto;margin-top:12px;">
+          <table>
+            <thead><tr><th>Category</th><th>Avg Score (0-10)</th><th>Response Count</th></tr></thead>
+            <tbody id="surveyBulkRows"></tbody>
+          </table>
         </div>
-        <div>
-          <label>Gender</label>
-          <select id="sf-gender">
-            <option value="">All</option>
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-          </select>
-        </div>
-        <div>
-          <label>AMA-Risk</label>
-          <select id="sf-ama">
-            <option value="">All</option>
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        </div>
-        <div>
-          <label>Category</label>
-          <select id="sf-category"></select>
-        </div>
-        <div>
-          <label>Average Score (0-10)</label>
-          <input type="number" id="sf-score" min="0" max="10" step="0.1" required>
-        </div>
-        <div>
-          <label>Response Count</label>
-          <input type="number" id="sf-count" min="1" required>
-        </div>
-        <div style="align-self:end;">
-          <button type="submit" class="btn">Add Entry</button>
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn">Submit All Entries</button>
         </div>
       </form>
     </div>
@@ -310,6 +308,7 @@
             <option value="">All</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
+            <option value="Other">Other</option>
           </select>
         </div>
         <div>
@@ -353,7 +352,7 @@
         <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">From</label><input type="month" id="svFilterStart"></div>
         <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">To</label><input type="month" id="svFilterEnd"></div>
         <select id="svFilterProgram"><option value="">All Programs</option><option value="SUD">SUD</option><option value="MH">MH</option></select>
-        <select id="svFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option></select>
+        <select id="svFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select>
         <select id="svFilterAma"><option value="">All AMA-Risk</option><option value="Yes">Yes</option><option value="No">No</option></select>
         <select id="svFilterCategory"><option value="">All Categories</option></select>
         <button class="btn secondary" onclick="clearSurveyFilter()">Clear</button>
@@ -414,6 +413,7 @@
           <select id="fg-gender" required>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
+            <option value="Other">Other</option>
           </select>
         </div>
         <div>
@@ -465,7 +465,7 @@
         <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">From date</label><input type="date" id="fgFilterDateStart"></div>
         <div><label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">To date</label><input type="date" id="fgFilterDateEnd"></div>
         <select id="fgFilterProgram"><option value="">All Programs</option><option value="SUD">SUD</option><option value="MH">MH</option></select>
-        <select id="fgFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option></select>
+        <select id="fgFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select>
         <select id="fgFilterAma"><option value="">All AMA-Risk</option><option value="Yes">Yes</option><option value="No">No</option></select>
         <select id="fgFilterCategory"><option value="">All Categories</option></select>
         <button class="btn secondary" onclick="clearFgFilter()">Clear</button>
@@ -596,11 +596,20 @@ function populateSelect(id, options) {
   el.innerHTML = options.map(o => `<option value="${o}">${o}</option>`).join('');
 }
 
+function initSurveyBulkRows() {
+  const tbody = document.getElementById('surveyBulkRows');
+  tbody.innerHTML = '';
+  CATEGORIES.concat([NPS_LABEL]).forEach((cat, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${cat}</td>
+      <td><input type="number" id="sf-score-${i}" min="0" max="10" step="0.1" style="width:90px;"></td>
+      <td><input type="number" id="sf-count-${i}" min="1" style="width:90px;"></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
 function initSelects() {
-  populateSelect('sf-category', CATEGORIES);
-  const npsOpt = document.createElement('option');
-  npsOpt.value = NPS_LABEL; npsOpt.textContent = NPS_LABEL;
-  document.getElementById('sf-category').appendChild(npsOpt);
+  initSurveyBulkRows();
   populateSelect('fg-category', CATEGORIES);
   populateSelect('fg-tag', TAGS);
   populateSelect('detailCategorySelect', CATEGORIES);
@@ -658,6 +667,10 @@ async function loadData() {
 async function insertSurvey(entry) {
   const [row] = await sbRequest('survey_entries', { method: 'POST', body: JSON.stringify(entry) });
   surveyData.push(row);
+}
+async function insertSurveyBatch(entries) {
+  const rows = await sbRequest('survey_entries', { method: 'POST', body: JSON.stringify(entries) });
+  surveyData.push(...rows);
 }
 async function insertFg(entry) {
   const [row] = await sbRequest('focus_group_entries', { method: 'POST', body: JSON.stringify(entry) });
@@ -743,16 +756,40 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.getElementById('surveyForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!editMode) return;
-  await insertSurvey({
-    period: document.getElementById('sf-period').value,
-    program: document.getElementById('sf-program').value || null,
-    gender: document.getElementById('sf-gender').value || null,
-    ama_risk: document.getElementById('sf-ama').value || null,
-    category: document.getElementById('sf-category').value,
-    score: parseFloat(document.getElementById('sf-score').value),
-    count: parseInt(document.getElementById('sf-count').value)
+  const period = document.getElementById('sf-period').value;
+  const program = document.getElementById('sf-program').value || null;
+  const gender = document.getElementById('sf-gender').value || null;
+  const ama_risk = document.getElementById('sf-ama').value || null;
+
+  const allCats = CATEGORIES.concat([NPS_LABEL]);
+  const entries = [];
+  const incomplete = [];
+  allCats.forEach((cat, i) => {
+    const scoreVal = document.getElementById(`sf-score-${i}`).value;
+    const countVal = document.getElementById(`sf-count-${i}`).value;
+    const hasScore = scoreVal !== '';
+    const hasCount = countVal !== '';
+    if (hasScore && hasCount) {
+      entries.push({ period, program, gender, ama_risk, category: cat, score: parseFloat(scoreVal), count: parseInt(countVal) });
+    } else if (hasScore || hasCount) {
+      incomplete.push(cat);
+    }
   });
-  e.target.reset();
+
+  if (incomplete.length) {
+    alert(`These categories have only a score or only a count, not both — fill in both or leave both blank:\n${incomplete.join(', ')}`);
+    return;
+  }
+  if (entries.length === 0) {
+    alert('Enter at least one category\'s score and count before submitting.');
+    return;
+  }
+
+  await insertSurveyBatch(entries);
+  allCats.forEach((cat, i) => {
+    document.getElementById(`sf-score-${i}`).value = '';
+    document.getElementById(`sf-count-${i}`).value = '';
+  });
   renderAll();
 });
 
