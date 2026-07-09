@@ -476,11 +476,26 @@
         <select id="fgFilterGender"><option value="">All Genders</option><option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option></select>
         <select id="fgFilterAma"><option value="">All AMA-Risk</option><option value="Yes">Yes</option><option value="No">No</option></select>
         <select id="fgFilterCategory"><option value="">All Categories</option></select>
+        <input type="text" id="fgSearchPatient" placeholder="Search patient code..." style="min-width:150px;">
+        <input type="text" id="fgSearchContext" placeholder="Search context keyword..." style="min-width:170px;">
         <button class="btn secondary" onclick="clearFgFilter()">Clear</button>
       </div>
       <div style="overflow-x:auto;">
         <table id="fgTable">
-          <thead><tr><th>Date</th><th>Session</th><th>Program</th><th>Gender</th><th>AMA-Risk</th><th>Patient</th><th>Category</th><th>Tag</th><th>Sev.</th><th>Context</th><th>Escalate</th><th></th></tr></thead>
+          <thead><tr>
+            <th onclick="setFgSort('date')" style="cursor:pointer;" id="fgTh-date">Date</th>
+            <th onclick="setFgSort('session')" style="cursor:pointer;" id="fgTh-session">Session</th>
+            <th onclick="setFgSort('program')" style="cursor:pointer;" id="fgTh-program">Program</th>
+            <th onclick="setFgSort('gender')" style="cursor:pointer;" id="fgTh-gender">Gender</th>
+            <th onclick="setFgSort('ama_risk')" style="cursor:pointer;" id="fgTh-ama_risk">AMA-Risk</th>
+            <th onclick="setFgSort('patient')" style="cursor:pointer;" id="fgTh-patient">Patient</th>
+            <th onclick="setFgSort('category')" style="cursor:pointer;" id="fgTh-category">Category</th>
+            <th onclick="setFgSort('tag')" style="cursor:pointer;" id="fgTh-tag">Tag</th>
+            <th onclick="setFgSort('severity')" style="cursor:pointer;" id="fgTh-severity">Sev.</th>
+            <th onclick="setFgSort('context')" style="cursor:pointer;" id="fgTh-context">Context</th>
+            <th onclick="setFgSort('escalate')" style="cursor:pointer;" id="fgTh-escalate">Escalate</th>
+            <th></th>
+          </tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -598,6 +613,8 @@ let fgData = [];
 let actionLogData = [];
 let dischargeData = [];
 let editingActionLogId = null;
+let fgSortColumn = 'date';
+let fgSortDir = 'desc';
 let charts = {};
 
 function populateSelect(id, options) {
@@ -1005,6 +1022,55 @@ async function deleteDischarge(id) {
 }
 
 // ---------- Focus group form ----------
+const FG_COLUMNS = ['date','session','program','gender','ama_risk','patient','category','tag','severity','context','escalate'];
+const FG_COL_LABELS = { date:'Date', session:'Session', program:'Program', gender:'Gender', ama_risk:'AMA-Risk', patient:'Patient', category:'Category', tag:'Tag', severity:'Sev.', context:'Context', escalate:'Escalate' };
+
+function setFgSort(col) {
+  if (fgSortColumn === col) {
+    fgSortDir = fgSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    fgSortColumn = col;
+    fgSortDir = 'asc';
+  }
+  renderFgTable();
+}
+function updateFgSortHeaders() {
+  FG_COLUMNS.forEach(col => {
+    const th = document.getElementById(`fgTh-${col}`);
+    if (!th) return;
+    const arrow = col === fgSortColumn ? (fgSortDir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+    th.textContent = FG_COL_LABELS[col] + arrow;
+  });
+}
+function fgCompare(a, b, col) {
+  let av = a[col], bv = b[col];
+  if (col === 'severity') { av = Number(av) || 0; bv = Number(bv) || 0; return av - bv; }
+  av = (av === null || av === undefined) ? '' : String(av);
+  bv = (bv === null || bv === undefined) ? '' : String(bv);
+  return av.localeCompare(bv);
+}
+
+// Cheap suffix-stripping so "understaffed" and "understaffing" match the same search, regardless of which form is typed.
+function stem(word) {
+  word = word.toLowerCase();
+  if (word.length > 6 && word.endsWith('ing')) return word.slice(0, -3);
+  if (word.length > 5 && word.endsWith('ies')) return word.slice(0, -3) + 'y';
+  if (word.length > 5 && word.endsWith('ed')) return word.slice(0, -2);
+  if (word.length > 5 && word.endsWith('es')) return word.slice(0, -2);
+  if (word.length > 4 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+function contextMatches(context, searchTerm) {
+  if (!searchTerm) return true;
+  const contextWords = (context || '').toLowerCase().split(/\W+/).filter(Boolean).map(stem);
+  const searchWords = searchTerm.toLowerCase().split(/\W+/).filter(Boolean).map(stem);
+  return searchWords.every(sw => contextWords.some(cw => cw.includes(sw) || sw.includes(cw)));
+}
+function patientMatches(patient, searchTerm) {
+  if (!searchTerm) return true;
+  return (patient || '').toLowerCase().includes(searchTerm.toLowerCase());
+}
+
 let lastFgMeta = null;
 document.getElementById('fgForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -1161,13 +1227,21 @@ function renderFgTable() {
   const genderFilter = document.getElementById('fgFilterGender').value;
   const amaFilter = document.getElementById('fgFilterAma').value;
   const catFilter = document.getElementById('fgFilterCategory').value;
-  let filtered = [...fgData].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const patientSearch = document.getElementById('fgSearchPatient').value.trim();
+  const contextSearch = document.getElementById('fgSearchContext').value.trim();
+  let filtered = [...fgData];
   if (dateStart) filtered = filtered.filter(r => r.date && r.date >= dateStart);
   if (dateEnd) filtered = filtered.filter(r => r.date && r.date <= dateEnd);
   if (progFilter) filtered = filtered.filter(r => r.program === progFilter);
   if (genderFilter) filtered = filtered.filter(r => r.gender === genderFilter);
   if (amaFilter) filtered = filtered.filter(r => r.ama_risk === amaFilter);
   if (catFilter) filtered = filtered.filter(r => r.category === catFilter);
+  if (patientSearch) filtered = filtered.filter(r => patientMatches(r.patient, patientSearch));
+  if (contextSearch) filtered = filtered.filter(r => contextMatches(r.context, contextSearch));
+  filtered.sort((a, b) => {
+    const cmp = fgCompare(a, b, fgSortColumn);
+    return fgSortDir === 'asc' ? cmp : -cmp;
+  });
   document.getElementById('fgEmpty').style.display = filtered.length ? 'none' : '';
   filtered.forEach(row => {
     const tr = document.createElement('tr');
@@ -1178,6 +1252,7 @@ function renderFgTable() {
       <td>${editMode ? `<button class="del-btn" onclick="deleteFg(${row.id})">Remove</button>` : ''}</td>`;
     tbody.appendChild(tr);
   });
+  updateFgSortHeaders();
 }
 async function deleteFg(id) {
   await removeFg(id);
@@ -1189,6 +1264,8 @@ document.getElementById('fgFilterProgram').addEventListener('change', renderFgTa
 document.getElementById('fgFilterGender').addEventListener('change', renderFgTable);
 document.getElementById('fgFilterAma').addEventListener('change', renderFgTable);
 document.getElementById('fgFilterCategory').addEventListener('change', renderFgTable);
+document.getElementById('fgSearchPatient').addEventListener('input', renderFgTable);
+document.getElementById('fgSearchContext').addEventListener('input', renderFgTable);
 function clearFgFilter() {
   document.getElementById('fgFilterDateStart').value = '';
   document.getElementById('fgFilterDateEnd').value = '';
@@ -1196,6 +1273,8 @@ function clearFgFilter() {
   document.getElementById('fgFilterGender').value = '';
   document.getElementById('fgFilterAma').value = '';
   document.getElementById('fgFilterCategory').value = '';
+  document.getElementById('fgSearchPatient').value = '';
+  document.getElementById('fgSearchContext').value = '';
   renderFgTable();
 }
 
