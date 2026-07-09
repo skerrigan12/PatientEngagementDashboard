@@ -25,6 +25,7 @@
     --amber-600: #B9822A;
     --amber-500: #D6A32C;
     --amber-100: #FBF0DA;
+    --green-600: #4B7A5A;
 
     /* Warm neutrals (page background, marketing-adjacent surfaces) */
     --stone-25: #FBF8F3;
@@ -212,6 +213,11 @@
     <div class="grid">
       <div class="card full-width">
         <h3>Average Survey Score by Category (most recent period per category, within filter)</h3>
+        <div style="display:flex; gap:16px; font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--green-600);margin-right:4px;"></span>Above 7</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--amber-500);margin-right:4px;"></span>6&ndash;7</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--danger);margin-right:4px;"></span>Below 6</span>
+        </div>
         <div class="chart-wrap"><canvas id="surveyChart"></canvas></div>
       </div>
     </div>
@@ -938,8 +944,16 @@ function renderOverview() {
     const rows = filteredSurvey.filter(r => r.category === c).sort((a,b) => b.period.localeCompare(a.period));
     latestByCategory[c] = rows.length ? rows[0].score : null;
   });
+  // Threshold coloring: >7 satisfactory, 6-7 caution, <6 low (matches safety-escalation red)
+  function scoreColor(score) {
+    if (score === null || score === undefined) return '#DCE2E8'; // slate-200, no data yet
+    if (score > 7) return '#4B7A5A'; // green-600
+    if (score >= 6) return '#D6A32C'; // amber-500
+    return '#B3453A'; // danger
+  }
   renderChart('surveyChart', 'bar', CATEGORIES, [{
-    label: 'Avg Score', data: CATEGORIES.map(c => latestByCategory[c]), backgroundColor: '#2F6AB2', borderRadius: 4
+    label: 'Avg Score', data: CATEGORIES.map(c => latestByCategory[c]),
+    backgroundColor: CATEGORIES.map(c => scoreColor(latestByCategory[c])), borderRadius: 4
   }], { scales: { y: { min: 0, max: 10 } } });
 
   const catCounts = CATEGORIES.map(c => filteredFg.filter(r => r.category === c).length);
