@@ -483,6 +483,12 @@
         </div>
       </form>
     </div>
+    <div class="card" id="alDigestCard">
+      <h3>Pre-Meeting Digest</h3>
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 10px;">Emails each department head their open/in-progress items. Sends automatically every Monday — use this to send an extra one before a scheduled meeting.</p>
+      <button class="btn" id="sendDigestBtn" onclick="sendDigestNow()">Send Digest Now</button>
+      <div id="digestResult" style="margin-top:8px;font-size:13px;color:var(--text-muted);"></div>
+    </div>
     <div class="card">
       <h3>Action Log</h3>
       <div class="filter-row">
@@ -561,6 +567,7 @@ function initSelects() {
 // ---------- Supabase ----------
 const SUPABASE_URL = 'https://zaawuqxzmzreqvxxulcu.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphYXd1cXh6bXpyZXF2eHh1bGN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNjk1MDksImV4cCI6MjA5ODk0NTUwOX0.9FjZCbRkmNUsI6p_tV-ERt7VDu-EsHm0RioSA0S5rac';
+const DIGEST_PUBLISHABLE_KEY = 'sb_publishable_JszHVMfztCMiLZzyopL0rA_iwOktq_f'; // Settings > API Keys > Publishable and secret API keys
 
 async function sbRequest(path, options = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -646,6 +653,7 @@ function updateLockUI() {
   document.getElementById('surveyLockMsg').style.display = editMode ? 'none' : '';
   document.getElementById('fgLockMsg').style.display = editMode ? 'none' : '';
   document.getElementById('alFormCard').style.display = editMode ? '' : 'none';
+  document.getElementById('alDigestCard').style.display = editMode ? '' : 'none';
   document.getElementById('alLockMsg').style.display = editMode ? 'none' : '';
   renderSurveyTable();
   renderFgTable();
@@ -752,6 +760,32 @@ document.getElementById('fgForm').addEventListener('submit', async (e) => {
 });
 
 // ---------- Action Log form ----------
+async function sendDigestNow() {
+  const btn = document.getElementById('sendDigestBtn');
+  const resultEl = document.getElementById('digestResult');
+  btn.disabled = true;
+  resultEl.textContent = 'Sending...';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-action-log-digest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': DIGEST_PUBLISHABLE_KEY
+      },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.error) {
+      resultEl.textContent = 'Error: ' + data.error;
+    } else {
+      resultEl.textContent = `Sent to ${data.sent ?? 0} department head(s).`;
+    }
+  } catch (e) {
+    resultEl.textContent = 'Failed to send: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
 document.getElementById('alForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!editMode) return;
