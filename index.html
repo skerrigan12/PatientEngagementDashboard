@@ -821,12 +821,17 @@ document.getElementById('surveyForm').addEventListener('submit', async (e) => {
     return;
   }
 
-  await insertSurveyBatch(entries);
-  allCats.forEach((cat, i) => {
-    document.getElementById(`sf-score-${i}`).value = '';
-    document.getElementById(`sf-count-${i}`).value = '';
-  });
-  renderAll();
+  try {
+    await insertSurveyBatch(entries);
+    allCats.forEach((cat, i) => {
+      document.getElementById(`sf-score-${i}`).value = '';
+      document.getElementById(`sf-count-${i}`).value = '';
+    });
+    renderAll();
+  } catch (err) {
+    console.error(err);
+    alert('Save failed: ' + err.message);
+  }
 });
 
 // ---------- CSV import (Category Score Calculator) ----------
