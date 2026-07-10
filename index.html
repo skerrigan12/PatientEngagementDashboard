@@ -933,11 +933,17 @@ function parseCsvFile() {
 
 async function confirmCsvImport() {
   if (!pendingCsvEntries || !pendingCsvEntries.length) return;
-  await insertSurveyBatch(pendingCsvEntries);
-  pendingCsvEntries = null;
-  document.getElementById('csvPreview').innerHTML = '<p style="color:var(--text-muted);">Imported successfully.</p>';
-  document.getElementById('csvFileInput').value = '';
-  renderAll();
+  const previewEl = document.getElementById('csvPreview');
+  try {
+    await insertSurveyBatch(pendingCsvEntries);
+    pendingCsvEntries = null;
+    previewEl.innerHTML = '<p style="color:var(--text-muted);">Imported successfully.</p>';
+    document.getElementById('csvFileInput').value = '';
+    renderAll();
+  } catch (err) {
+    console.error(err);
+    previewEl.innerHTML = `<p style="color:#B3453A;">Import failed: ${err.message}</p>`;
+  }
 }
 function cancelCsvImport() {
   pendingCsvEntries = null;
