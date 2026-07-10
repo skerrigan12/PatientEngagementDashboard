@@ -1287,6 +1287,38 @@ function clearOverviewFilter() {
 }
 
 // ---------- Overview ----------
+// Trend arrows: latest period vs the period immediately before it, always — independent of the Overview date filter.
+function prevPeriod(period) {
+  const [y, m] = period.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function periodWeightedAvg(rows, period) {
+  const matches = rows.filter(r => r.period === period);
+  const total = matches.reduce((s, r) => s + r.count, 0);
+  if (total === 0) return null;
+  return matches.reduce((s, r) => s + r.score * r.count, 0) / total;
+}
+function fgMonthOf(dateStr) {
+  return (dateStr || '').slice(0, 7);
+}
+function trendHTML(current, previous, opts) {
+  opts = opts || {};
+  const higherIsBetter = opts.higherIsBetter !== false;
+  const decimals = opts.decimals !== undefined ? opts.decimals : 1;
+  const suffix = opts.suffix || '';
+  if (current === null || current === undefined || previous === null || previous === undefined) return '';
+  const diff = current - previous;
+  if (Math.abs(diff) < Math.pow(10, -decimals) / 2) {
+    return `<span style="color:var(--text-muted);font-size:13px;font-weight:600;"> \u2014 0${suffix}</span>`;
+  }
+  const isUp = diff > 0;
+  const good = isUp === higherIsBetter;
+  const color = good ? 'var(--green-600)' : 'var(--danger)';
+  const arrow = isUp ? '\u25B2' : '\u25BC';
+  return `<span style="color:${color};font-size:13px;font-weight:600;"> ${arrow} ${Math.abs(diff).toFixed(decimals)}${suffix}</span>`;
+}
+
 function renderOverview() {
   const startVal = document.getElementById('overviewStart').value; // "YYYY-MM" or ""
   const endVal = document.getElementById('overviewEnd').value;
@@ -1307,6 +1339,8 @@ function renderOverview() {
 
   const statsEl = document.getElementById('overviewStats');
   const catOnly = filteredSurvey.filter(r => r.category !== NPS_LABEL);
+  const catOnlyAll = surveyData.filter(r => r.category !== NPS_LABEL);
+  const npsOnlyAll = surveyData.filter(r => r.category === NPS_LABEL);
   const totalResponses = catOnly.reduce((sum, r) => sum + r.count, 0);
   const avgAll = catOnly.length ? (catOnly.reduce((s,r) => s + r.score * r.count, 0) / (totalResponses || 1)).toFixed(1) : '—';
   const totalFg = filteredFg.length;
@@ -1320,12 +1354,34 @@ function renderOverview() {
   const responseRate = totalDischarges > 0 ? Math.round((totalResponses / totalDischarges) * 100) + '%' : '—';
   const responseRateSub = totalDischarges > 0 ? `${totalResponses} responses / ${totalDischarges} discharges` : 'No discharge counts entered yet';
 
+  // Trend arrows: always latest period vs the one before it, independent of the filter above.
+  const allPeriods = surveyData.map(r => r.period).filter(Boolean);
+  const latestPeriod = allPeriods.length ? allPeriods.reduce((max, p) => p > max ? p : max) : null;
+  const previousPeriod = latestPeriod ? prevPeriod(latestPeriod) : null;
+
+  const avgTrend = latestPeriod && previousPeriod
+    ? trendHTML(periodWeightedAvg(catOnlyAll, latestPeriod), periodWeightedAvg(catOnlyAll, previousPeriod), { higherIsBetter: true, decimals: 1 })
+    : '';
+  const npsTrend = latestPeriod && previousPeriod
+    ? trendHTML(periodWeightedAvg(npsOnlyAll, latestPeriod), periodWeightedAvg(npsOnlyAll, previousPeriod), { higherIsBetter: true, decimals: 1 })
+    : '';
+  const escCurrent = latestPeriod ? fgData.filter(r => fgMonthOf(r.date) === latestPeriod && r.escalate === 'Y').length : null;
+  const escPrevious = previousPeriod ? fgData.filter(r => fgMonthOf(r.date) === previousPeriod && r.escalate === 'Y').length : null;
+  const escTrend = trendHTML(escCurrent, escPrevious, { higherIsBetter: false, decimals: 0 });
+  const dischargeCurrent = latestPeriod ? dischargeData.filter(r => r.period === latestPeriod).reduce((s,r) => s + r.count, 0) : 0;
+  const dischargePrevious = previousPeriod ? dischargeData.filter(r => r.period === previousPeriod).reduce((s,r) => s + r.count, 0) : 0;
+  const responsesCurrent = latestPeriod ? catOnlyAll.filter(r => r.period === latestPeriod).reduce((s,r) => s + r.count, 0) : 0;
+  const responsesPrevious = previousPeriod ? catOnlyAll.filter(r => r.period === previousPeriod).reduce((s,r) => s + r.count, 0) : 0;
+  const rateCurrent = dischargeCurrent > 0 ? (responsesCurrent / dischargeCurrent) * 100 : null;
+  const ratePrevious = dischargePrevious > 0 ? (responsesPrevious / dischargePrevious) * 100 : null;
+  const rateTrend = trendHTML(rateCurrent, ratePrevious, { higherIsBetter: true, decimals: 0, suffix: '%' });
+
   statsEl.innerHTML = `
-    <div class="card"><div class="stat-label">Overall Avg. Survey Score</div><div class="stat-value">${avgAll}</div><div class="stat-sub">${totalResponses} responses recorded</div></div>
-    <div class="card"><div class="stat-label">Would Recommend (NPS)</div><div class="stat-value">${latestNps}</div><div class="stat-sub">${npsRows.length ? 'Most recent period: ' + npsRows[0].period : 'No data yet'}</div></div>
+    <div class="card"><div class="stat-label">Overall Avg. Survey Score</div><div class="stat-value">${avgAll}${avgTrend}</div><div class="stat-sub">${totalResponses} responses recorded</div></div>
+    <div class="card"><div class="stat-label">Would Recommend (NPS)</div><div class="stat-value">${latestNps}${npsTrend}</div><div class="stat-sub">${npsRows.length ? 'Most recent period: ' + npsRows[0].period : 'No data yet'}</div></div>
     <div class="card"><div class="stat-label">Focus Group Data Points</div><div class="stat-value">${totalFg}</div><div class="stat-sub">${new Set(filteredFg.map(r=>r.session)).size} sessions logged</div></div>
-    <div class="card"><div class="stat-label">Safety Escalations</div><div class="stat-value" style="color:${escalations>0?'#B3453A':'#12142E'}">${escalations}</div><div class="stat-sub">Discovery reports triggered</div></div>
-    <div class="card"><div class="stat-label">Response Rate</div><div class="stat-value">${responseRate}</div><div class="stat-sub">${responseRateSub}</div></div>
+    <div class="card"><div class="stat-label">Safety Escalations</div><div class="stat-value" style="color:${escalations>0?'#B3453A':'#12142E'}">${escalations}${escTrend}</div><div class="stat-sub">Discovery reports triggered</div></div>
+    <div class="card"><div class="stat-label">Response Rate</div><div class="stat-value">${responseRate}${rateTrend}</div><div class="stat-sub">${responseRateSub}</div></div>
   `;
 
   // Most recent score per category (within filtered range)
