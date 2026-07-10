@@ -1064,7 +1064,7 @@ function contextMatches(context, searchTerm) {
   if (!searchTerm) return true;
   const contextWords = (context || '').toLowerCase().split(/\W+/).filter(Boolean).map(stem);
   const searchWords = searchTerm.toLowerCase().split(/\W+/).filter(Boolean).map(stem);
-  return searchWords.every(sw => contextWords.some(cw => cw.includes(sw) || sw.includes(cw)));
+  return searchWords.every(sw => contextWords.some(cw => cw.includes(sw)));
 }
 function patientMatches(patient, searchTerm) {
   if (!searchTerm) return true;
