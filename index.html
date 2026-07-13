@@ -190,6 +190,7 @@
   <button class="tab-btn" data-view="focusgroup">Focus Group Data</button>
   <button class="tab-btn" data-view="detail">Category Detail</button>
   <button class="tab-btn" data-view="actionlog">Action Log</button>
+  <button class="tab-btn" data-view="complaints">Patient Complaints</button>
 </nav>
 
 <main>
@@ -588,6 +589,104 @@
     </div>
   </div>
 
+  <!-- PATIENT COMPLAINTS -->
+  <div class="view" id="view-complaints">
+    <div id="pcLockMsg" class="locked-msg" style="display:none;">View-only mode. Unlock editing to add or remove complaint entries.</div>
+    <div class="card" id="pcFormCard">
+      <h3>Add Patient Complaint</h3>
+      <form class="entry" id="pcForm">
+        <div>
+          <label>Date</label>
+          <input type="date" id="pc-date" required>
+        </div>
+        <div>
+          <label>Patient Code</label>
+          <input type="text" id="pc-patient" placeholder="e.g. JS2026-350" required>
+        </div>
+        <div>
+          <label>Program</label>
+          <select id="pc-program">
+            <option value="">Unknown</option>
+            <option value="SUD">SUD</option>
+            <option value="MH">MH</option>
+          </select>
+        </div>
+        <div>
+          <label>Gender</label>
+          <select id="pc-gender">
+            <option value="">Unknown</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label>AMA-Risk</label>
+          <select id="pc-ama">
+            <option value="">Unknown</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+        <div>
+          <label>Category</label>
+          <select id="pc-category"></select>
+        </div>
+        <div>
+          <label>Severity</label>
+          <select id="pc-severity">
+            <option value="1">1 — Minor</option>
+            <option value="2">2 — Moderate</option>
+            <option value="3">3 — Significant</option>
+          </select>
+        </div>
+        <div>
+          <label>Escalate?</label>
+          <select id="pc-escalate">
+            <option value="N">No</option>
+            <option value="Y">Yes</option>
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="pc-status">
+            <option value="Open">Open</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+        </div>
+        <div class="full-width" style="grid-column: 1 / -1;">
+          <label>Complaint Description</label>
+          <input type="text" id="pc-context" placeholder="What was reported" required>
+        </div>
+        <div style="align-self:end;">
+          <button type="submit" class="btn">Add Complaint</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h3>Patient Complaints</h3>
+      <div class="filter-row">
+        <select id="pcFilterCategory"><option value="">All Categories</option></select>
+        <select id="pcFilterStatus">
+          <option value="">All Statuses</option>
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Resolved">Resolved</option>
+        </select>
+        <input type="text" id="pcSearchPatient" placeholder="Search patient code...">
+        <button class="btn secondary" onclick="clearPcFilter()">Clear</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table id="pcTable">
+          <thead><tr><th>Date</th><th>Patient</th><th>Category</th><th>Sev.</th><th>Description</th><th>Escalate</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="empty-state" id="pcEmpty" style="display:none;">No complaints entered yet.</div>
+    </div>
+  </div>
+
 </main>
 
 <div class="modal-overlay" id="modalOverlay">
@@ -613,6 +712,8 @@ let fgData = [];
 let actionLogData = [];
 let dischargeData = [];
 let editingActionLogId = null;
+let complaintsData = [];
+let editingComplaintId = null;
 let fgSortColumn = 'date';
 let fgSortDir = 'desc';
 let charts = {};
@@ -655,6 +756,11 @@ function initSelects() {
   CATEGORIES.forEach(c => {
     const o = document.createElement('option'); o.value = c; o.textContent = c; alfc.appendChild(o);
   });
+  populateSelect('pc-category', CATEGORIES);
+  const pcfc = document.getElementById('pcFilterCategory');
+  CATEGORIES.forEach(c => {
+    const o = document.createElement('option'); o.value = c; o.textContent = c; pcfc.appendChild(o);
+  });
 }
 
 // ---------- Supabase ----------
@@ -691,6 +797,9 @@ async function loadData() {
   try {
     dischargeData = await sbRequest('discharge_counts?select=*') || [];
   } catch (e) { console.error('Discharge counts load failed', e); dischargeData = []; }
+  try {
+    complaintsData = await sbRequest('patient_complaints?select=*') || [];
+  } catch (e) { console.error('Patient complaints load failed', e); complaintsData = []; }
 }
 
 async function insertSurvey(entry) {
@@ -726,6 +835,19 @@ async function updateActionLog(id, changes) {
   const idx = actionLogData.findIndex(r => r.id === id);
   if (idx !== -1) actionLogData[idx] = row;
 }
+async function insertComplaint(entry) {
+  const [row] = await sbRequest('patient_complaints', { method: 'POST', body: JSON.stringify(entry) });
+  complaintsData.push(row);
+}
+async function removeComplaint(id) {
+  await sbRequest(`patient_complaints?id=eq.${id}`, { method: 'DELETE' });
+  complaintsData = complaintsData.filter(r => r.id !== id);
+}
+async function updateComplaint(id, changes) {
+  const [row] = await sbRequest(`patient_complaints?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(changes) });
+  const idx = complaintsData.findIndex(r => r.id === id);
+  if (idx !== -1) complaintsData[idx] = row;
+}
 async function insertDischarge(entry) {
   const [row] = await sbRequest('discharge_counts', { method: 'POST', body: JSON.stringify(entry) });
   dischargeData.push(row);
@@ -740,6 +862,7 @@ function toggleEditMode() {
   if (editMode) {
     editMode = false;
     editingActionLogId = null;
+    editingComplaintId = null;
     updateLockUI();
   } else {
     document.getElementById('modalTitle').textContent = 'Enter Passcode to Edit';
@@ -771,10 +894,13 @@ function updateLockUI() {
   document.getElementById('alFormCard').style.display = editMode ? '' : 'none';
   document.getElementById('alDigestCard').style.display = editMode ? '' : 'none';
   document.getElementById('alLockMsg').style.display = editMode ? 'none' : '';
+  document.getElementById('pcFormCard').style.display = editMode ? '' : 'none';
+  document.getElementById('pcLockMsg').style.display = editMode ? 'none' : '';
   renderSurveyTable();
   renderFgTable();
   renderActionLogTable();
   renderDischargeTable();
+  renderComplaintsTable();
 }
 
 // ---------- Tabs ----------
@@ -1215,6 +1341,104 @@ function clearAlFilter() {
   renderActionLogTable();
 }
 
+// ---------- Patient Complaints ----------
+document.getElementById('pcForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!editMode) return;
+  await insertComplaint({
+    date: document.getElementById('pc-date').value,
+    patient: document.getElementById('pc-patient').value,
+    program: document.getElementById('pc-program').value || null,
+    gender: document.getElementById('pc-gender').value || null,
+    ama_risk: document.getElementById('pc-ama').value || null,
+    category: document.getElementById('pc-category').value,
+    severity: parseInt(document.getElementById('pc-severity').value),
+    context: document.getElementById('pc-context').value,
+    escalate: document.getElementById('pc-escalate').value,
+    status: document.getElementById('pc-status').value
+  });
+  e.target.reset();
+  renderAll();
+});
+
+function renderComplaintsTable() {
+  const tbody = document.querySelector('#pcTable tbody');
+  tbody.innerHTML = '';
+  const catFilter = document.getElementById('pcFilterCategory').value;
+  const statusFilter = document.getElementById('pcFilterStatus').value;
+  const patientSearch = document.getElementById('pcSearchPatient').value.trim();
+  let filtered = [...complaintsData].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  if (catFilter) filtered = filtered.filter(r => r.category === catFilter);
+  if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+  if (patientSearch) filtered = filtered.filter(r => patientMatches(r.patient, patientSearch));
+  document.getElementById('pcEmpty').style.display = filtered.length ? 'none' : '';
+  const statusClass = { 'Open': 'status-open', 'In Progress': 'status-progress', 'Resolved': 'status-resolved' };
+  const statuses = ['Open', 'In Progress', 'Resolved'];
+  filtered.forEach(row => {
+    const tr = document.createElement('tr');
+    if (row.escalate === 'Y') tr.classList.add('escalated');
+    if (editMode && row.id === editingComplaintId) {
+      const catOptions = CATEGORIES.map(c => `<option value="${escapeAttr(c)}" ${c === row.category ? 'selected' : ''}>${c}</option>`).join('');
+      const statusOptions = statuses.map(s => `<option value="${s}" ${s === row.status ? 'selected' : ''}>${s}</option>`).join('');
+      tr.innerHTML = `
+        <td><input type="date" id="pc-edit-date-${row.id}" value="${escapeAttr(row.date)}" style="width:130px;"></td>
+        <td><input type="text" id="pc-edit-patient-${row.id}" value="${escapeAttr(row.patient)}" style="width:110px;"></td>
+        <td><select id="pc-edit-category-${row.id}" style="width:150px;">${catOptions}</select></td>
+        <td><select id="pc-edit-severity-${row.id}" style="width:60px;"><option value="1" ${row.severity===1?'selected':''}>1</option><option value="2" ${row.severity===2?'selected':''}>2</option><option value="3" ${row.severity===3?'selected':''}>3</option></select></td>
+        <td><input type="text" id="pc-edit-context-${row.id}" value="${escapeAttr(row.context)}" style="width:200px;"></td>
+        <td><select id="pc-edit-escalate-${row.id}"><option value="N" ${row.escalate==='N'?'selected':''}>No</option><option value="Y" ${row.escalate==='Y'?'selected':''}>Yes</option></select></td>
+        <td><select id="pc-edit-status-${row.id}" style="width:110px;">${statusOptions}</select></td>
+        <td style="white-space:nowrap;">
+          <button class="btn" style="padding:4px 8px;font-size:12px;" onclick="saveEditComplaint(${row.id})">Save</button>
+          <button class="btn secondary" style="padding:4px 8px;font-size:12px;" onclick="cancelEditComplaint()">Cancel</button>
+        </td>`;
+    } else {
+      tr.innerHTML = `<td>${row.date||''}</td><td>${row.patient||''}</td><td>${row.category}</td>
+        <td><span class="badge sev-${row.severity}">${row.severity}</span></td>
+        <td>${row.context||''}</td>
+        <td>${row.escalate === 'Y' ? '⚠ YES' : 'No'}</td>
+        <td><span class="badge ${statusClass[row.status]||''}">${row.status||''}</span></td>
+        <td style="white-space:nowrap;">${editMode ? `<button class="btn secondary" style="padding:4px 8px;font-size:12px;margin-right:4px;" onclick="startEditComplaint(${row.id})">Edit</button><button class="del-btn" onclick="deleteComplaint(${row.id})">Remove</button>` : ''}</td>`;
+    }
+    tbody.appendChild(tr);
+  });
+}
+function startEditComplaint(id) {
+  editingComplaintId = id;
+  renderComplaintsTable();
+}
+function cancelEditComplaint() {
+  editingComplaintId = null;
+  renderComplaintsTable();
+}
+async function saveEditComplaint(id) {
+  const changes = {
+    date: document.getElementById(`pc-edit-date-${id}`).value,
+    patient: document.getElementById(`pc-edit-patient-${id}`).value,
+    category: document.getElementById(`pc-edit-category-${id}`).value,
+    severity: parseInt(document.getElementById(`pc-edit-severity-${id}`).value),
+    context: document.getElementById(`pc-edit-context-${id}`).value,
+    escalate: document.getElementById(`pc-edit-escalate-${id}`).value,
+    status: document.getElementById(`pc-edit-status-${id}`).value
+  };
+  await updateComplaint(id, changes);
+  editingComplaintId = null;
+  renderComplaintsTable();
+}
+async function deleteComplaint(id) {
+  await removeComplaint(id);
+  renderAll();
+}
+document.getElementById('pcFilterCategory').addEventListener('change', renderComplaintsTable);
+document.getElementById('pcFilterStatus').addEventListener('change', renderComplaintsTable);
+document.getElementById('pcSearchPatient').addEventListener('input', renderComplaintsTable);
+function clearPcFilter() {
+  document.getElementById('pcFilterCategory').value = '';
+  document.getElementById('pcFilterStatus').value = '';
+  document.getElementById('pcSearchPatient').value = '';
+  renderComplaintsTable();
+}
+
 function fillSamePatient() {
   if (!lastFgMeta) {
     alert('No previous entry yet this session. Submit one entry first, then this button will carry its patient details forward.');
@@ -1473,6 +1697,7 @@ function renderAll() {
   renderFgTable();
   renderActionLogTable();
   renderDischargeTable();
+  renderComplaintsTable();
   renderOverview();
   if (document.getElementById('view-detail').classList.contains('active')) renderDetail();
 }
