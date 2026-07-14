@@ -480,6 +480,7 @@
         <input type="text" id="fgSearchPatient" placeholder="Search patient code..." style="min-width:150px;">
         <input type="text" id="fgSearchContext" placeholder="Search context keyword..." style="min-width:170px;">
         <button class="btn secondary" onclick="clearFgFilter()">Clear</button>
+        <button class="btn secondary" onclick="exportFgData()">Export Filtered (.md)</button>
       </div>
       <div style="overflow-x:auto;">
         <table id="fgTable">
@@ -676,6 +677,7 @@
         </select>
         <input type="text" id="pcSearchPatient" placeholder="Search patient code...">
         <button class="btn secondary" onclick="clearPcFilter()">Clear</button>
+        <button class="btn secondary" onclick="exportComplaintsData()">Export Filtered (.md)</button>
       </div>
       <div style="overflow-x:auto;">
         <table id="pcTable">
@@ -1361,9 +1363,7 @@ document.getElementById('pcForm').addEventListener('submit', async (e) => {
   renderAll();
 });
 
-function renderComplaintsTable() {
-  const tbody = document.querySelector('#pcTable tbody');
-  tbody.innerHTML = '';
+function getFilteredComplaints() {
   const catFilter = document.getElementById('pcFilterCategory').value;
   const statusFilter = document.getElementById('pcFilterStatus').value;
   const patientSearch = document.getElementById('pcSearchPatient').value.trim();
@@ -1371,6 +1371,12 @@ function renderComplaintsTable() {
   if (catFilter) filtered = filtered.filter(r => r.category === catFilter);
   if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
   if (patientSearch) filtered = filtered.filter(r => patientMatches(r.patient, patientSearch));
+  return filtered;
+}
+function renderComplaintsTable() {
+  const tbody = document.querySelector('#pcTable tbody');
+  tbody.innerHTML = '';
+  const filtered = getFilteredComplaints();
   document.getElementById('pcEmpty').style.display = filtered.length ? 'none' : '';
   const statusClass = { 'Open': 'status-open', 'In Progress': 'status-progress', 'Resolved': 'status-resolved' };
   const statuses = ['Open', 'In Progress', 'Resolved'];
@@ -1439,6 +1445,105 @@ function clearPcFilter() {
   renderComplaintsTable();
 }
 
+// ---------- Export (read-only; does not feed back into import) ----------
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+function describeFgFilters() {
+  const f = getFgFilterState();
+  const parts = [];
+  if (f.dateStart || f.dateEnd) parts.push(`Date: ${f.dateStart || '…'} to ${f.dateEnd || '…'}`);
+  if (f.progFilter) parts.push(`Program: ${f.progFilter}`);
+  if (f.genderFilter) parts.push(`Gender: ${f.genderFilter}`);
+  if (f.amaFilter) parts.push(`AMA-Risk: ${f.amaFilter}`);
+  if (f.catFilter) parts.push(`Category: ${f.catFilter}`);
+  if (f.patientSearch) parts.push(`Patient search: "${f.patientSearch}"`);
+  if (f.contextSearch) parts.push(`Context keyword: "${f.contextSearch}"`);
+  return parts.length ? parts.join(' | ') : 'None (all records)';
+}
+function describePcFilters() {
+  const catFilter = document.getElementById('pcFilterCategory').value;
+  const statusFilter = document.getElementById('pcFilterStatus').value;
+  const patientSearch = document.getElementById('pcSearchPatient').value.trim();
+  const parts = [];
+  if (catFilter) parts.push(`Category: ${catFilter}`);
+  if (statusFilter) parts.push(`Status: ${statusFilter}`);
+  if (patientSearch) parts.push(`Patient search: "${patientSearch}"`);
+  return parts.length ? parts.join(' | ') : 'None (all records)';
+}
+function exportFgData() {
+  const rows = getFilteredFg();
+  const lines = [];
+  lines.push('# Focus Group Data Export');
+  lines.push('');
+  lines.push(`- Exported: ${new Date().toLocaleString()}`);
+  lines.push(`- Filters applied: ${describeFgFilters()}`);
+  lines.push(`- Row count: ${rows.length}`);
+  lines.push('');
+  if (!rows.length) {
+    lines.push('_No rows matched the current filters._');
+  } else {
+    rows.forEach((r, i) => {
+      lines.push(`## Entry ${i + 1}`);
+      lines.push(`- Date: ${r.date || ''}`);
+      lines.push(`- Session: ${r.session || ''}`);
+      lines.push(`- Program: ${r.program || ''}`);
+      lines.push(`- Gender: ${r.gender || ''}`);
+      lines.push(`- AMA-Risk: ${r.ama_risk || ''}`);
+      lines.push(`- Patient Code: ${r.patient || ''}`);
+      lines.push(`- Category: ${r.category || ''}`);
+      lines.push(`- Tag: ${r.tag || ''}`);
+      lines.push(`- Severity: ${r.severity || ''}`);
+      lines.push(`- Escalated (Safety Concern): ${r.escalate === 'Y' ? 'Yes' : 'No'}`);
+      lines.push(`- Context: ${r.context || ''}`);
+      lines.push('');
+    });
+  }
+  downloadTextFile(`focus-group-export-${todayStamp()}.md`, lines.join('\n'));
+}
+function exportComplaintsData() {
+  const rows = getFilteredComplaints();
+  const lines = [];
+  lines.push('# Patient Complaints Export');
+  lines.push('');
+  lines.push(`- Exported: ${new Date().toLocaleString()}`);
+  lines.push(`- Filters applied: ${describePcFilters()}`);
+  lines.push(`- Row count: ${rows.length}`);
+  lines.push('');
+  if (!rows.length) {
+    lines.push('_No rows matched the current filters._');
+  } else {
+    rows.forEach((r, i) => {
+      lines.push(`## Complaint ${i + 1}`);
+      lines.push(`- Date: ${r.date || ''}`);
+      lines.push(`- Patient Code: ${r.patient || ''}`);
+      lines.push(`- Program: ${r.program || ''}`);
+      lines.push(`- Gender: ${r.gender || ''}`);
+      lines.push(`- AMA-Risk: ${r.ama_risk || ''}`);
+      lines.push(`- Category: ${r.category || ''}`);
+      lines.push(`- Severity: ${r.severity || ''}`);
+      lines.push(`- Escalated: ${r.escalate === 'Y' ? 'Yes' : 'No'}`);
+      lines.push(`- Status: ${r.status || ''}`);
+      lines.push(`- Complaint Narrative:`);
+      lines.push('');
+      lines.push(`  ${(r.context || '').split('\n').join('\n  ')}`);
+      lines.push('');
+    });
+  }
+  downloadTextFile(`patient-complaints-export-${todayStamp()}.md`, lines.join('\n'));
+}
+
 function fillSamePatient() {
   if (!lastFgMeta) {
     alert('No previous entry yet this session. Submit one entry first, then this button will carry its patient details forward.');
@@ -1453,17 +1558,20 @@ function fillSamePatient() {
   document.getElementById('fg-category').focus();
 }
 
-function renderFgTable() {
-  const tbody = document.querySelector('#fgTable tbody');
-  tbody.innerHTML = '';
-  const dateStart = document.getElementById('fgFilterDateStart').value;
-  const dateEnd = document.getElementById('fgFilterDateEnd').value;
-  const progFilter = document.getElementById('fgFilterProgram').value;
-  const genderFilter = document.getElementById('fgFilterGender').value;
-  const amaFilter = document.getElementById('fgFilterAma').value;
-  const catFilter = document.getElementById('fgFilterCategory').value;
-  const patientSearch = document.getElementById('fgSearchPatient').value.trim();
-  const contextSearch = document.getElementById('fgSearchContext').value.trim();
+function getFgFilterState() {
+  return {
+    dateStart: document.getElementById('fgFilterDateStart').value,
+    dateEnd: document.getElementById('fgFilterDateEnd').value,
+    progFilter: document.getElementById('fgFilterProgram').value,
+    genderFilter: document.getElementById('fgFilterGender').value,
+    amaFilter: document.getElementById('fgFilterAma').value,
+    catFilter: document.getElementById('fgFilterCategory').value,
+    patientSearch: document.getElementById('fgSearchPatient').value.trim(),
+    contextSearch: document.getElementById('fgSearchContext').value.trim()
+  };
+}
+function getFilteredFg() {
+  const { dateStart, dateEnd, progFilter, genderFilter, amaFilter, catFilter, patientSearch, contextSearch } = getFgFilterState();
   let filtered = [...fgData];
   if (dateStart) filtered = filtered.filter(r => r.date && r.date >= dateStart);
   if (dateEnd) filtered = filtered.filter(r => r.date && r.date <= dateEnd);
@@ -1477,6 +1585,12 @@ function renderFgTable() {
     const cmp = fgCompare(a, b, fgSortColumn);
     return fgSortDir === 'asc' ? cmp : -cmp;
   });
+  return filtered;
+}
+function renderFgTable() {
+  const tbody = document.querySelector('#fgTable tbody');
+  tbody.innerHTML = '';
+  const filtered = getFilteredFg();
   document.getElementById('fgEmpty').style.display = filtered.length ? 'none' : '';
   filtered.forEach(row => {
     const tr = document.createElement('tr');
