@@ -824,6 +824,11 @@ async function removeFg(id) {
   await sbRequest(`focus_group_entries?id=eq.${id}`, { method: 'DELETE' });
   fgData = fgData.filter(r => r.id !== id);
 }
+async function updateFg(id, changes) {
+  const [row] = await sbRequest(`focus_group_entries?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(changes) });
+  const idx = fgData.findIndex(r => r.id === id);
+  if (idx !== -1) fgData[idx] = row;
+}
 async function insertActionLog(entry) {
   const [row] = await sbRequest('action_log_entries', { method: 'POST', body: JSON.stringify(entry) });
   actionLogData.push(row);
@@ -1404,7 +1409,7 @@ function renderComplaintsTable() {
         <td>${row.context||''}</td>
         <td>${row.escalate === 'Y' ? '⚠ YES' : 'No'}</td>
         <td><span class="badge ${statusClass[row.status]||''}">${row.status||''}</span></td>
-        <td style="white-space:nowrap;">${editMode ? `<button class="btn secondary" style="padding:4px 8px;font-size:12px;margin-right:4px;" onclick="startEditComplaint(${row.id})">Edit</button><button class="del-btn" onclick="deleteComplaint(${row.id})">Remove</button>` : ''}</td>`;
+        <td style="white-space:nowrap;">${editMode ? `${row.escalate !== 'Y' ? `<button class="btn secondary" style="padding:4px 8px;font-size:12px;margin-right:4px;" onclick="escalateComplaintToActionLog(${row.id})">Escalate</button>` : ''}<button class="btn secondary" style="padding:4px 8px;font-size:12px;margin-right:4px;" onclick="startEditComplaint(${row.id})">Edit</button><button class="del-btn" onclick="deleteComplaint(${row.id})">Remove</button>` : ''}</td>`;
     }
     tbody.appendChild(tr);
   });
@@ -1433,6 +1438,22 @@ async function saveEditComplaint(id) {
 }
 async function deleteComplaint(id) {
   await removeComplaint(id);
+  renderAll();
+}
+async function escalateComplaintToActionLog(id) {
+  const row = complaintsData.find(r => r.id === id);
+  if (!row) return;
+  if (!confirm('Escalate this patient complaint to the Action Log? This will mark it as an escalation and add a new Action Log entry.')) return;
+  if (row.escalate !== 'Y') {
+    await updateComplaint(id, { escalate: 'Y' });
+  }
+  await insertActionLog({
+    date: row.date || new Date().toISOString().slice(0,10),
+    category: row.category,
+    issue: `Escalated from Patient Complaint (Patient ${row.patient || ''}): ${row.context || ''}`,
+    owner: '',
+    status: 'Open'
+  });
   renderAll();
 }
 document.getElementById('pcFilterCategory').addEventListener('change', renderComplaintsTable);
@@ -1598,13 +1619,29 @@ function renderFgTable() {
     tr.innerHTML = `<td>${row.date}</td><td>${row.session}</td><td>${row.program}</td><td>${row.gender}</td><td>${row.ama_risk}</td><td>${row.patient}</td>
       <td>${row.category}</td><td>${row.tag}</td><td><span class="badge sev-${row.severity}">${row.severity}</span></td>
       <td>${row.context||''}</td><td>${row.escalate === 'Y' ? '⚠ YES' : 'No'}</td>
-      <td>${editMode ? `<button class="del-btn" onclick="deleteFg(${row.id})">Remove</button>` : ''}</td>`;
+      <td style="white-space:nowrap;">${editMode ? `${row.escalate !== 'Y' ? `<button class="btn secondary" style="padding:4px 8px;font-size:12px;margin-right:4px;" onclick="escalateFgToActionLog(${row.id})">Escalate</button>` : ''}<button class="del-btn" onclick="deleteFg(${row.id})">Remove</button>` : ''}</td>`;
     tbody.appendChild(tr);
   });
   updateFgSortHeaders();
 }
 async function deleteFg(id) {
   await removeFg(id);
+  renderAll();
+}
+async function escalateFgToActionLog(id) {
+  const row = fgData.find(r => r.id === id);
+  if (!row) return;
+  if (!confirm('Escalate this focus group entry to the Action Log? This will mark it as an escalation and add a new Action Log entry.')) return;
+  if (row.escalate !== 'Y') {
+    await updateFg(id, { escalate: 'Y' });
+  }
+  await insertActionLog({
+    date: row.date || new Date().toISOString().slice(0,10),
+    category: row.category,
+    issue: `Escalated from Focus Group (Session ${row.session || ''}, Patient ${row.patient || ''}): ${row.context || row.tag || ''}`,
+    owner: '',
+    status: 'Open'
+  });
   renderAll();
 }
 document.getElementById('fgFilterDateStart').addEventListener('change', renderFgTable);
