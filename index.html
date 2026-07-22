@@ -1692,16 +1692,28 @@ function renderOverview() {
   const npsOnlyAll = surveyData.filter(r => r.category === NPS_LABEL);
   const totalResponses = catOnly.reduce((sum, r) => sum + r.count, 0);
   const avgAll = catOnly.length ? (catOnly.reduce((s,r) => s + r.score * r.count, 0) / (totalResponses || 1)).toFixed(1) : '—';
+
+  // Surveys completed (not category-entry rows): each bulk submission writes one row
+  // per category, all sharing the same period/program/gender/ama_risk. No single
+  // category's count can exceed the number of surveys in that batch, so the max
+  // count within each period+program+gender+ama_risk group approximates surveys completed.
+  const surveyGroups = {};
+  catOnly.forEach(r => {
+    const key = [r.period, r.program || '', r.gender || '', r.ama_risk || ''].join('|');
+    surveyGroups[key] = Math.max(surveyGroups[key] || 0, r.count);
+  });
+  const totalSurveysCompleted = Object.values(surveyGroups).reduce((sum, c) => sum + c, 0);
   const totalFg = filteredFg.length;
   const escalations = filteredFg.filter(r => r.escalate === 'Y').length;
   const npsRows = filteredSurvey.filter(r => r.category === NPS_LABEL).sort((a,b) => b.period.localeCompare(a.period));
   const latestNps = npsRows.length ? npsRows[0].score.toFixed(1) : '—';
 
-  // Response rate = survey responses / discharges, for the same filtered period range.
-  // Uses category-only responses (excludes the standalone NPS metric) to match "responses" as tracked elsewhere.
+  // Response rate = surveys completed / discharges, for the same filtered period range.
+  // Uses totalSurveysCompleted (one count per survey batch, not one per category row)
+  // so a survey with entries across all 10 categories isn't counted 10 times over.
   const totalDischarges = filteredDischarge.reduce((sum, r) => sum + r.count, 0);
-  const responseRate = totalDischarges > 0 ? Math.round((totalResponses / totalDischarges) * 100) + '%' : '—';
-  const responseRateSub = totalDischarges > 0 ? `${totalResponses} responses / ${totalDischarges} discharges` : 'No discharge counts entered yet';
+  const responseRate = totalDischarges > 0 ? Math.round((totalSurveysCompleted / totalDischarges) * 100) + '%' : '—';
+  const responseRateSub = totalDischarges > 0 ? `${totalSurveysCompleted} surveys completed / ${totalDischarges} discharges` : 'No discharge counts entered yet';
 
   // Trend arrows: always latest period vs the one before it, independent of the filter above.
   const allPeriods = surveyData.map(r => r.period).filter(Boolean);
